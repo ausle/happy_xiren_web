@@ -3,10 +3,10 @@
     <div class="auth-wrap">
       <div class="auth-logo">
         <RouterLink class="auth-logo__link" to="/">
-          <div class="auth-logo__icon brand-gradient">😊</div>
+          <img class="auth-logo__icon" src="/smile-logo.svg" alt="喜人同乐" />
           <div>
-            <p class="auth-logo__title">Happy</p>
-            <p class="auth-logo__subtitle">喜人同乐</p>
+            <p class="auth-logo__title">喜人同乐</p>
+            <p class="auth-logo__subtitle">一起开心</p>
           </div>
         </RouterLink>
       </div>
@@ -88,7 +88,7 @@
         </template>
       </div>
 
-      <p class="auth-copyright">© 2026 Happy 喜人同乐. All rights reserved.</p>
+      <p class="auth-copyright">© 2026 喜人同乐. All rights reserved.</p>
     </div>
   </div>
 </template>
@@ -165,13 +165,9 @@ const handleSubmit = () => {
 }
 
 .auth-logo__icon {
-  display: flex;
   width: 48px;
   height: 48px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  font-size: 24px;
+  flex-shrink: 0;
   box-shadow: 0 10px 18px rgba(15, 23, 42, 0.12);
 }
 

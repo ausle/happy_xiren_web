@@ -6,8 +6,8 @@
       </button>
 
       <div class="dialog__header">
-        <div class="dialog__logo brand-gradient">😊</div>
-        <h2 class="dialog__title">登录 Happy</h2>
+        <img class="dialog__logo" src="/smile-logo.svg" alt="喜人同乐" />
+        <h2 class="dialog__title">登录喜人同乐</h2>
         <p class="dialog__subtitle">喜人同乐，欢迎回来</p>
       </div>
 
@@ -123,14 +123,10 @@ const goTo = (path: string) => {
 }
 
 .dialog__logo {
-  display: flex;
   width: 40px;
   height: 40px;
-  align-items: center;
-  justify-content: center;
   margin-bottom: 12px;
-  border-radius: 999px;
-  font-size: 20px;
+  flex-shrink: 0;
 }
 
 .dialog__title {

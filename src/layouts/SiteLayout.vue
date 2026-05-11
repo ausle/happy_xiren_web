@@ -59,7 +59,7 @@
         <SiteLogo />
         <div class="site-footer__links">
           <a class="fade-link" href="#">About</a>
-          <span>© 2026 Happy 喜人同乐. All rights reserved.</span>
+          <span>© 2026 喜人同乐. All rights reserved.</span>
         </div>
       </div>
     </footer>

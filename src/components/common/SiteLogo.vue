@@ -1,9 +1,9 @@
 <template>
   <RouterLink class="site-logo" to="/">
-    <div class="site-logo__icon brand-gradient">😊</div>
+    <img class="site-logo__icon" src="/smile-logo.svg" alt="喜人同乐" />
     <div class="site-logo__text">
-      <span class="site-logo__title">Happy</span>
-      <span class="site-logo__subtitle">喜人同乐</span>
+      <span class="site-logo__title">喜人同乐</span>
+      <span class="site-logo__subtitle">一起开心</span>
     </div>
   </RouterLink>
 </template>
@@ -21,13 +21,9 @@ import { RouterLink } from "vue-router";
 }
 
 .site-logo__icon {
-  display: flex;
   width: 32px;
   height: 32px;
-  border-radius: 999px;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
+  flex-shrink: 0;
 }
 
 .site-logo__text {
