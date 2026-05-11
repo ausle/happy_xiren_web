@@ -57,5 +57,5 @@ jobs:
           password: ${{ secrets.SERVER_PASSWORD }}
           # -t 检查语法
           script: |
-            sudo /usr/local/nginx/sbin/nginx -t
-            sudo /usr/local/nginx/sbin/nginx -s reload
+            sudo /www/server/nginx/sbin/nginx -t
+            sudo /www/server/nginx/sbin/nginx -s reload
