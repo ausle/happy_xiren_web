@@ -600,6 +600,12 @@ const filteredArticles = computed(() => {
   }
 }
 
+@media (max-width: 768px) {
+  .hero-section {
+    display: none;
+  }
+}
+
 @media (max-width: 640px) {
   .featured-grid {
     grid-template-columns: 1fr;
