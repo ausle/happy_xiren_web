@@ -6,7 +6,7 @@
       </button>
 
       <div class="dialog__header">
-        <img class="dialog__logo" src="/smile-logo.svg" alt="喜人同乐" />
+        <img class="dialog__logo" :src="smileLogoUrl" alt="喜人同乐" />
         <h2 class="dialog__title">登录喜人同乐</h2>
         <p class="dialog__subtitle">喜人同乐，欢迎回来</p>
       </div>
@@ -55,6 +55,7 @@ const emit = defineEmits<{
 }>();
 
 const router = useRouter();
+const smileLogoUrl = `${import.meta.env.BASE_URL}smile-logo.svg`;
 const username = ref("");
 const password = ref("");
 const showPassword = ref(false);

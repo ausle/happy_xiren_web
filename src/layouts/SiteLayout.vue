@@ -20,6 +20,14 @@
           <button class="login-trigger" type="button" @click="uiStore.setLoginOpen(true)">登录</button>
         </div>
       </div>
+      <div class="page-shell mobile-only">
+        <nav class="site-nav site-nav--mobile">
+          <RouterLink class="site-nav__item" :class="{ active: route.path === '/' }" to="/">首页</RouterLink>
+          <RouterLink class="site-nav__item" :class="{ active: route.path.startsWith('/traffic') }" to="/traffic">流量</RouterLink>
+          <button class="site-nav__item" type="button">创作</button>
+          <button class="site-nav__item" type="button">文档</button>
+        </nav>
+      </div>
 
       <div
         v-if="isHome"
@@ -160,6 +168,7 @@ onBeforeUnmount(() => {
   height: 56px;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
 }
 
 .site-header__left,
@@ -168,20 +177,28 @@ onBeforeUnmount(() => {
   align-items: center;
 }
 
+.site-header__left {
+  min-width: 0;
+}
+
 .site-header__spacer {
   width: 16px;
+  flex-shrink: 0;
 }
 
 .site-nav {
   display: flex;
   align-items: center;
+  min-width: 0;
 }
 
 .site-nav__item {
+  flex-shrink: 0;
   border-radius: 10px;
   padding: 6px 12px;
   color: #4b5563;
   font-size: 14px;
+  white-space: nowrap;
   transition: background-color 0.2s ease, color 0.2s ease;
   cursor: pointer;
 }
@@ -199,6 +216,7 @@ onBeforeUnmount(() => {
 
 .site-header__right {
   gap: 12px;
+  flex-shrink: 0;
 }
 
 .site-lang,
@@ -223,6 +241,10 @@ onBeforeUnmount(() => {
 
 .login-trigger:hover {
   background: #f9fafb;
+}
+
+.site-nav--mobile {
+  display: none;
 }
 
 .sub-nav-wrap {
@@ -321,7 +343,58 @@ onBeforeUnmount(() => {
   font-size: 14px;
 }
 
+@media (max-width: 1024px) {
+  .site-nav--mobile {
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+    padding: 0 0 10px;
+    scrollbar-width: none;
+  }
+
+  .site-nav--mobile::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 @media (max-width: 768px) {
+  .site-header__inner {
+    height: auto;
+    min-height: 56px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+
+  .site-header__spacer {
+    display: none;
+  }
+
+  .site-header__right {
+    gap: 8px;
+  }
+
+  .login-trigger {
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+
+  .site-nav--mobile {
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+    padding: 0 0 10px;
+    scrollbar-width: none;
+  }
+
+  .site-nav--mobile::-webkit-scrollbar {
+    display: none;
+  }
+
+  .site-nav--mobile .site-nav__item {
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+
   .site-footer__inner {
     flex-direction: column;
     align-items: flex-start;

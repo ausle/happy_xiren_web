@@ -3,7 +3,7 @@
     <div class="auth-wrap">
       <div class="auth-logo">
         <RouterLink class="auth-logo__link" to="/">
-          <img class="auth-logo__icon" src="/smile-logo.svg" alt="喜人同乐" />
+          <img class="auth-logo__icon" :src="smileLogoUrl" alt="喜人同乐" />
           <div>
             <p class="auth-logo__title">喜人同乐</p>
             <p class="auth-logo__subtitle">一起开心</p>
@@ -99,6 +99,7 @@ import { reactive, ref } from "vue";
 import { RouterLink, useRouter } from "vue-router";
 
 const router = useRouter();
+const smileLogoUrl = `${import.meta.env.BASE_URL}smile-logo.svg`;
 const form = reactive({ username: "", email: "", password: "", confirm: "" });
 const showPassword = ref(false);
 const showConfirm = ref(false);

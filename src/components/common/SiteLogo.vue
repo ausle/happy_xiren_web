@@ -1,6 +1,6 @@
 <template>
   <RouterLink class="site-logo" to="/">
-    <img class="site-logo__icon" src="/smile-logo.svg" alt="喜人同乐" />
+    <img class="site-logo__icon" :src="smileLogoUrl" alt="喜人同乐" />
     <div class="site-logo__text">
       <span class="site-logo__title">喜人同乐</span>
       <span class="site-logo__subtitle">一起开心</span>
@@ -10,6 +10,8 @@
 
 <script setup lang="ts">
 import { RouterLink } from "vue-router";
+
+const smileLogoUrl = `${import.meta.env.BASE_URL}smile-logo.svg`;
 </script>
 
 <style scoped>
