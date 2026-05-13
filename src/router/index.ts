@@ -58,6 +58,11 @@ const routes = [
     name: "forgot-password",
     component: () => import("@/views/ForgotPasswordPage.vue"),
   },
+  {
+    path: "/write",
+    name: "write-article",
+    component: () => import("@/views/WriteArticlePage.vue"),
+  },
 ];
 
 const router = createRouter({

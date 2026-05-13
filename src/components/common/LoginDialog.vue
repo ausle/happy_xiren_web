@@ -46,15 +46,27 @@
 </template>
 
 <script setup lang="ts">
+import axios from "axios";
 import { Eye, EyeOff, X } from "lucide-vue-next";
 import { ref } from "vue";
 import { useRouter } from "vue-router";
+import http from "@/api/http";
+import { useAuthStore } from "@/stores/auth";
+
+type ApiResponse<T> = {
+  status: {
+    code: number;
+    msg: string;
+  };
+  result: T;
+};
 
 const emit = defineEmits<{
   close: [];
 }>();
 
 const router = useRouter();
+const authStore = useAuthStore();
 const smileLogoUrl = `${import.meta.env.BASE_URL}smile-logo.svg`;
 const username = ref("");
 const password = ref("");
@@ -62,19 +74,62 @@ const showPassword = ref(false);
 const loading = ref(false);
 const error = ref("");
 
-const handleLogin = () => {
+const toFormData = (payload: Record<string, string>) => {
+  const params = new URLSearchParams();
+  Object.entries(payload).forEach(([key, value]) => {
+    params.append(key, value);
+  });
+  return params;
+};
+
+const postForm = async <T>(url: string, payload: Record<string, string>) => {
+  const { data } = await http.post<ApiResponse<T>>(url, toFormData(payload));
+  if (data.status.code !== 0) {
+    throw new Error(data.status.msg || "请求失败");
+  }
+  return data.result;
+};
+
+const extractErrorMessage = (value: unknown) => {
+  if (axios.isAxiosError(value)) {
+    const responseMessage = value.response?.data?.status?.msg;
+    if (responseMessage) return responseMessage;
+    if (value.message) return value.message;
+  }
+
+  if (value instanceof Error && value.message) {
+    return value.message;
+  }
+
+  return "登录失败，请稍后重试";
+};
+
+const handleLogin = async () => {
   error.value = "";
 
-  if (!username.value.trim() || !password.value.trim()) {
+  const normalizedUsername = username.value.trim();
+  const normalizedPassword = password.value.trim();
+  if (!normalizedUsername || !normalizedPassword) {
     error.value = "请输入账号和密码";
     return;
   }
 
   loading.value = true;
-  window.setTimeout(() => {
+
+  try {
+    username.value = normalizedUsername;
+    password.value = normalizedPassword;
+    await postForm<boolean>("/login/username", {
+      username: normalizedUsername,
+      password: normalizedPassword,
+    });
+    await authStore.fetchLoginStatus();
+    emit("close");
+  } catch (value) {
+    error.value = extractErrorMessage(value);
+  } finally {
     loading.value = false;
-    error.value = "账号或密码错误，请重试";
-  }, 800);
+  }
 };
 
 const goTo = (path: string) => {

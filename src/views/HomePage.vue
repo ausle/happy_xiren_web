@@ -1,626 +1,981 @@
 <template>
   <div>
-    <section class="hero-section orange-gradient">
+    <section class="hero-section">
       <div class="page-shell">
-        <div class="featured-grid">
-          <article v-for="card in featuredCards" :key="card.id" class="featured-card">
-            <div class="featured-card__image-wrap">
-              <img :alt="card.title" :src="card.image" class="featured-card__image" />
+        <div class="hero-panel">
+          <div class="hero-panel__inner">
+            <p class="hero-panel__eyebrow">PORTFOLIO</p>
+            <h1 class="hero-panel__title">程序与想象</h1>
+            <p class="hero-panel__description">
+              我是 Chance，热爱编程，也喜欢把灵感做成真实可用的作品。这里记录设计、前后端实现，
+              以及那些从想法走到落地的过程。
+            </p>
+
+            <div class="hero-panel__divider" />
+
+            <div class="hero-card-grid">
+              <article
+                v-for="card in portfolioCards"
+                :key="card.title"
+                class="hero-card"
+                :class="{ 'hero-card--clickable': !!card.href }"
+                @click="openPortfolioCard(card)"
+              >
+                <div class="hero-card__top">
+                  <p class="hero-card__label">{{ card.label }}</p>
+                  <ArrowRight class="hero-card__arrow" :size="16" />
+                </div>
+                <h3 class="hero-card__title line-clamp-2">{{ card.title }}</h3>
+                <p class="hero-card__summary line-clamp-2">{{ card.summary }}</p>
+              </article>
             </div>
-            <div class="featured-card__body">
-              <p class="featured-card__title line-clamp-2">{{ card.title }}</p>
-              <div class="featured-card__tags">
-                <span v-for="tag in card.tags" :key="tag" class="featured-card__tag" :style="{ color: getTagColor(tag) }">
-                  <span class="featured-card__dot" :style="{ background: getTagColor(tag) }" />
-                  {{ tag }}
-                </span>
-              </div>
-              <div class="featured-card__meta">{{ card.author }}，{{ card.date }}</div>
-            </div>
-          </article>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="hero-category-section">
+      <div class="page-shell">
+        <div class="hero-category-bar">
+          <button
+            v-for="category in articleCategories"
+            :key="category"
+            class="hero-category"
+            :class="{ active: uiStore.activeCategory === category }"
+            type="button"
+            @click="selectCategory(category)"
+          >
+            {{ category }}
+          </button>
         </div>
       </div>
     </section>
 
     <div class="page-shell home-content">
-      <div class="home-main">
-        <section class="panel article-list">
-          <template v-if="filteredArticles.length">
-            <article v-for="article in filteredArticles" :key="article.id" class="article-item">
-              <div class="article-item__content">
-                <div class="article-item__head">
-                  <span v-if="article.featured" class="article-item__badge">推荐</span>
-                  <h3
-                    class="article-item__title"
-                    :class="{ featured: article.featured }"
-                    @click="router.push(`/article/${article.id}`)"
-                  >
-                    {{ article.title }}
-                  </h3>
-                </div>
-                <p class="article-item__summary line-clamp-2">{{ article.summary }}</p>
-                <div class="article-item__meta">
-                  <div class="article-item__author">
-                    <BaseAvatar :initials="article.author.initials" :size="28" />
-                    <span>{{ article.author.name }}</span>
-                    <span class="dot-separator">·</span>
-                    <span class="muted-text">{{ article.date }}</span>
-                  </div>
-                  <div class="article-item__stats">
-                    <span><Eye :size="13" /> {{ article.views }}</span>
-                    <span><MessageCircle :size="13" /> {{ article.comments }}</span>
-                    <span><ThumbsUp :size="13" /> {{ article.likes }}</span>
-                  </div>
-                  <div class="article-item__tags">
-                    <span
-                      v-for="tag in article.tags"
-                      :key="tag"
-                      class="article-item__tag"
-                      :style="{ background: `${getTagColor(tag)}15`, color: getTagColor(tag) }"
-                    >
-                      {{ tag }}
-                    </span>
-                  </div>
-                </div>
+      <section class="article-list">
+        <div v-if="loading" class="article-loading" aria-live="polite" aria-busy="true">
+          <div class="article-loading__header">
+            <span class="article-loading__eyebrow">CURATED POSTS</span>
+            <p class="article-loading__title">正在整理这一页的文章</p>
+          </div>
+
+          <div class="article-grid article-grid--loading">
+            <article
+              v-for="placeholder in loadingPlaceholders"
+              :key="placeholder"
+              class="article-card article-card--skeleton"
+            >
+              <div class="article-card__topline">
+                <span class="article-skeleton article-skeleton--type" />
+                <span class="article-skeleton article-skeleton--serial" />
               </div>
-              <div v-if="article.thumbnail" class="article-item__thumb" @click="router.push(`/article/${article.id}`)">
-                <img alt="" :src="article.thumbnail" />
+
+              <div class="article-card__image-wrap article-card__image-wrap--skeleton">
+                <span class="article-skeleton article-skeleton--image" />
+              </div>
+
+              <div class="article-card__title-skeleton">
+                <span class="article-skeleton article-skeleton--title article-skeleton--title-wide" />
+                <span class="article-skeleton article-skeleton--title article-skeleton--title-narrow" />
+              </div>
+
+              <div class="article-card__summary-skeleton">
+                <span class="article-skeleton article-skeleton--summary" />
+                <span class="article-skeleton article-skeleton--summary article-skeleton--summary-short" />
+              </div>
+
+              <div class="article-card__meta">
+                <span class="article-skeleton article-skeleton--meta" />
+                <span class="article-skeleton article-skeleton--meta article-skeleton--meta-short" />
               </div>
             </article>
-            <div class="article-list__footer">
-              <button class="article-list__more" type="button">加载更多</button>
-            </div>
-          </template>
-          <div v-else class="article-list__empty">该分类暂无文章</div>
-        </section>
+          </div>
+        </div>
 
-        <aside class="home-sidebar desktop-only">
-          <div class="panel sidebar-card">
-            <h4 class="sidebar-card__title">关于喜人同乐</h4>
-            <div class="sidebar-announcement" v-for="item in announcements" :key="item.id">
-              <div class="sidebar-announcement__row">
-                <div class="sidebar-announcement__title">
-                  <span class="sidebar-announcement__badge">{{ item.tag }}</span>
-                  <span>{{ item.title }}</span>
-                </div>
-                <button class="sidebar-announcement__btn" type="button">{{ item.btn }}</button>
+        <div v-else-if="errorMessage" class="article-list__state article-list__state--error">
+          {{ errorMessage }}
+        </div>
+
+        <template v-else-if="displayArticles.length">
+          <div class="article-grid">
+            <article
+              v-for="(article, index) in displayArticles"
+              :key="article.articleId"
+              class="article-card"
+              @click="openArticle(article)"
+            >
+              <div class="article-card__topline">
+                <span class="article-card__type">{{ getArticleDisplayType(article) }}</span>
+                <span class="article-card__serial">({{ formatArticleSerial(index) }})</span>
               </div>
-              <p class="sidebar-announcement__desc">{{ item.desc }}</p>
-            </div>
+
+              <div class="article-card__image-wrap">
+                <img
+                  :src="getArticleCover(article, index)"
+                  :alt="article.title"
+                  class="article-card__image"
+                />
+              </div>
+
+              <h3 class="article-card__title line-clamp-2">{{ article.title }}</h3>
+              <p class="article-card__summary line-clamp-2">
+                {{ article.summary || article.shortTitle || "暂无摘要" }}
+              </p>
+
+              <div class="article-card__meta">
+                <span class="article-card__author">{{ article.authorName || "匿名作者" }}</span>
+                <span class="article-card__views">
+                  <Eye :size="14" />
+                  {{ formatCount(article.count?.readCount) }}
+                </span>
+              </div>
+            </article>
           </div>
 
-          <div class="sidebar-banner purple-gradient">
-            <div class="sidebar-banner__title">🎉 春季写作活动</div>
-            <p class="sidebar-banner__desc">参与活动，赢取精美周边 + 年度会员资格！截止 6 月 30 日。</p>
-            <button class="sidebar-banner__btn" type="button">查看详情 →</button>
-          </div>
+          <nav v-if="showPagination" class="pagination" aria-label="文章分页">
+            <button class="pagination__item" :disabled="currentPage <= 1" type="button" @click="goToPage(1)">
+              首页
+            </button>
+            <button class="pagination__item" :disabled="currentPage <= 1" type="button" @click="goToPage(currentPage - 1)">
+              上一页
+            </button>
+            <button
+              v-for="page in visiblePageNumbers"
+              :key="page"
+              class="pagination__item"
+              :class="{ active: page === currentPage }"
+              type="button"
+              @click="goToPage(page)"
+            >
+              {{ page }}
+            </button>
+            <button
+              class="pagination__item"
+              :disabled="currentPage >= pageTotal"
+              type="button"
+              @click="goToPage(currentPage + 1)"
+            >
+              下一页
+            </button>
+            <button class="pagination__item" :disabled="currentPage >= pageTotal" type="button" @click="goToPage(pageTotal)">
+              尾页
+            </button>
+          </nav>
+        </template>
 
-          <div class="panel sidebar-card">
-            <h4 class="sidebar-card__title">热门文章</h4>
-            <div v-for="(item, index) in hotArticles" :key="item.id" class="sidebar-hot">
-              <span class="sidebar-hot__index" :class="{ top: index < 3 }">{{ index + 1 }}</span>
-              <p class="sidebar-hot__title line-clamp-2">{{ item.title }}</p>
-            </div>
-          </div>
-
-          <div class="sidebar-quick">
-            <h4 class="sidebar-card__title">快速入口</h4>
-            <div class="sidebar-quick__grid">
-              <button v-for="item in quickEntries" :key="item.label" class="sidebar-quick__item" type="button">
-                <span class="sidebar-quick__label">{{ item.label }}</span>
-                <span class="sidebar-quick__desc">{{ item.desc }}</span>
-              </button>
-            </div>
-          </div>
-        </aside>
-      </div>
+        <div v-else class="article-list__state">
+          {{ currentCategoryLabel }} 暂无文章
+        </div>
+      </section>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { Eye, MessageCircle, ThumbsUp } from "lucide-vue-next";
-import { computed } from "vue";
-import { useRouter } from "vue-router";
-import BaseAvatar from "@/components/common/BaseAvatar.vue";
-import { announcements, articles, featuredCards, hotArticles } from "@/data/articles";
-import { useUiStore } from "@/stores/ui";
+import { ArrowRight, Eye } from "lucide-vue-next";
+import { computed, onMounted, ref, watch } from "vue";
+import { fetchCategoryArticles, fetchHomeIndex } from "@/api/home";
+import { DEFAULT_HOME_CATEGORY, useUiStore } from "@/stores/ui";
+import type { CategoryArticleListResponse, HomeArticle } from "@/types/home";
 
-const router = useRouter();
+interface PortfolioCard {
+  label: string;
+  title: string;
+  summary: string;
+  href?: string;
+}
+
+const DEFAULT_PAGE_SIZE = 12;
+const MAX_VISIBLE_PAGES = 7;
+
 const uiStore = useUiStore();
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "/api";
+const loading = ref(false);
+const errorMessage = ref("");
+const displayArticles = ref<HomeArticle[]>([]);
+const currentPage = ref(1);
+const pageSize = ref(DEFAULT_PAGE_SIZE);
+const pageTotal = ref(0);
+const total = ref(0);
+const skipNextCategoryWatch = ref(false);
+const loadingPlaceholders = Array.from({ length: DEFAULT_PAGE_SIZE }, (_, index) => index);
 
-const tagColors: Record<string, string> = {
-  AI: "#8B5CF6",
-  工具: "#3B82F6",
-  效率: "#06B6D4",
-  增长: "#10B981",
-  实战: "#F59E0B",
-  后端: "#6366F1",
-  面试: "#EC4899",
-  求职: "#14B8A6",
-  简历: "#F97316",
-  内容: "#EF4444",
-  社区: "#84CC16",
-  付费: "#A78BFA",
-  一人公司: "#06B6D4",
-  Agent: "#7C3AED",
-  增长策略: "#10B981",
-  变现方法: "#F59E0B",
-  案例拆解: "#EC4899",
-  工具推荐: "#3B82F6",
-};
-
-const quickEntries = [
-  { label: "📚 学习路线", desc: "系统化路径" },
-  { label: "💼 简历优化", desc: "免费模板" },
-  { label: "🎯 项目实战", desc: "12 个项目" },
-  { label: "💬 技术答疑", desc: "专家在线" },
+const portfolioCards: PortfolioCard[] = [
+  {
+    label: "COLLECTION",
+    title: "Vibe Coding 开发指北",
+    summary: "记录从灵感、设计到网页落地的真实开发过程。",
+  },
+  {
+    label: "WORKS",
+    title: "值得反复研究的网站作品",
+    summary: "整理独立开发、网页设计与视觉表达相关的优质项目。",
+  },
+  {
+    label: "GITHUB",
+    title: "开源仓库",
+    summary: "沉淀模板、工具和实验性小项目，持续更新中。",
+  },
 ];
 
-const getTagColor = (tag: string) => tagColors[tag] ?? "#6B7280";
-
-const filteredArticles = computed(() => {
-  if (uiStore.activeCategory === "全部") {
-    return articles;
+const backendOrigin = (() => {
+  if (apiBaseUrl.startsWith("http://") || apiBaseUrl.startsWith("https://")) {
+    return new URL(apiBaseUrl).origin;
   }
 
-  return articles.filter(
-    (item) => item.category === uiStore.activeCategory || item.tags.includes(uiStore.activeCategory),
-  );
+  const isLocalHost = ["localhost", "127.0.0.1"].includes(window.location.hostname);
+  return isLocalHost ? "http://localhost:8080" : window.location.origin;
+})();
+
+const articleCategories = computed(() => {
+  const categories = uiStore.homeCategoryNames.filter(Boolean);
+  return categories.length ? categories : [DEFAULT_HOME_CATEGORY];
 });
+
+const currentCategoryLabel = computed(() => uiStore.activeCategory || DEFAULT_HOME_CATEGORY);
+const showPagination = computed(() => total.value > pageSize.value);
+const visiblePageNumbers = computed(() => {
+  const totalPages = pageTotal.value;
+  if (totalPages <= 0) {
+    return [];
+  }
+
+  if (totalPages <= MAX_VISIBLE_PAGES) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  const half = Math.floor(MAX_VISIBLE_PAGES / 2);
+  let start = Math.max(1, currentPage.value - half);
+  let end = start + MAX_VISIBLE_PAGES - 1;
+
+  if (end > totalPages) {
+    end = totalPages;
+    start = end - MAX_VISIBLE_PAGES + 1;
+  }
+
+  return Array.from({ length: end - start + 1 }, (_, index) => start + index);
+});
+
+watch(
+  () => uiStore.activeCategory,
+  (category) => {
+    if (!category) {
+      return;
+    }
+
+    if (skipNextCategoryWatch.value) {
+      skipNextCategoryWatch.value = false;
+      return;
+    }
+
+    void loadCategoryPage(category, 1);
+  },
+);
+
+onMounted(() => {
+  void initHomePage();
+});
+
+async function initHomePage() {
+  try {
+    const response = await fetchHomeIndex();
+    const currentCategory =
+      response.currentCategory ||
+      response.categories?.find((item) => item.selected)?.category ||
+      response.categories?.[0]?.category ||
+      DEFAULT_HOME_CATEGORY;
+
+    skipNextCategoryWatch.value = true;
+    uiStore.setHomeCategories(response.categories ?? [], currentCategory);
+    await loadCategoryPage(currentCategory, 1);
+    skipNextCategoryWatch.value = false;
+  } catch {
+    errorMessage.value = "首页数据加载失败，请稍后重试。";
+  }
+}
+
+async function loadCategoryPage(category: string, page: number) {
+  loading.value = true;
+  errorMessage.value = "";
+
+  try {
+    const response = await fetchCategoryArticles(category, page, DEFAULT_PAGE_SIZE);
+    applyCategoryResponse(response);
+  } catch {
+    errorMessage.value = "分类文章加载失败，请稍后重试。";
+  } finally {
+    loading.value = false;
+  }
+}
+
+function applyCategoryResponse(response: CategoryArticleListResponse) {
+  displayArticles.value = response.articles?.list ?? [];
+  currentPage.value = response.pageNum ?? 1;
+  pageSize.value = response.pageSize ?? DEFAULT_PAGE_SIZE;
+  pageTotal.value = response.pageTotal ?? 0;
+  total.value = response.total ?? 0;
+}
+
+function goToPage(page: number) {
+  if (page < 1 || page > pageTotal.value || page === currentPage.value || loading.value) {
+    return;
+  }
+  void loadCategoryPage(currentCategoryLabel.value, page);
+}
+
+function selectCategory(category: string) {
+  if (category === uiStore.activeCategory || loading.value) {
+    return;
+  }
+  uiStore.setActiveCategory(category);
+}
+
+function getArticleTags(article: HomeArticle) {
+  const tags = article.tags?.map((tag) => tag.tag).filter(Boolean) ?? [];
+  if (tags.length) {
+    return tags;
+  }
+  return article.category?.category ? [article.category.category] : [];
+}
+
+function openPortfolioCard(card: PortfolioCard) {
+  if (!card.href) {
+    return;
+  }
+  window.open(card.href, "_blank", "noopener");
+}
+
+function formatCount(value?: number | null) {
+  if (!value) {
+    return "0";
+  }
+  if (value >= 10000) {
+    return `${(value / 10000).toFixed(value >= 100000 ? 0 : 1)}万`;
+  }
+  return `${value}`;
+}
+
+function getArticleDetailPath(article: HomeArticle) {
+  const slug = article.urlSlug ? `/${encodeURIComponent(article.urlSlug)}` : "";
+  return `/article/detail/${article.articleId}${slug}`;
+}
+
+function getArticleDisplayType(article: HomeArticle) {
+  const tag = getArticleTags(article)[0];
+  const mapping: Record<string, string> = {
+    后端: "Backend",
+    前端: "Frontend",
+    Java: "Article",
+    AI: "Article",
+    架构: "Architecture",
+    源码: "Source",
+  };
+  return `- ${mapping[tag ?? ""] ?? "Article"} -`;
+}
+
+function formatArticleSerial(index: number) {
+  const serial = Math.max(displayArticles.value.length - index, 1);
+  return `${serial}`.padStart(3, "0");
+}
+
+function getArticleCover(article: HomeArticle, index: number) {
+  if (article.cover) {
+    return article.cover;
+  }
+
+  const palette = [
+    ["#101827", "#7c3aed", "#22d3ee"],
+    ["#201515", "#f97316", "#fb7185"],
+    ["#0f172a", "#38bdf8", "#a78bfa"],
+    ["#111827", "#f59e0b", "#f472b6"],
+  ][index % 4];
+
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 780">
+      <defs>
+        <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="${palette[0]}" />
+          <stop offset="55%" stop-color="${palette[1]}" />
+          <stop offset="100%" stop-color="${palette[2]}" />
+        </linearGradient>
+      </defs>
+      <rect width="1200" height="780" rx="40" fill="url(#bg)" />
+      <circle cx="1030" cy="160" r="160" fill="rgba(255,255,255,0.10)" />
+      <circle cx="240" cy="620" r="220" fill="rgba(255,255,255,0.08)" />
+      <path d="M70 520 C 260 410, 410 330, 640 430 S 980 590, 1150 430" stroke="rgba(255,255,255,0.72)" stroke-width="18" fill="none" stroke-linecap="round"/>
+      <text x="78" y="110" fill="rgba(255,255,255,0.96)" font-size="40" font-family="Inter, Arial, sans-serif">${getArticleDisplayType(article).replace(/&/g, "&amp;")}</text>
+      <text x="78" y="660" fill="rgba(255,255,255,0.16)" font-size="150" font-weight="700" font-family="Inter, Arial, sans-serif">${article.title.slice(0, 10).replace(/&/g, "&amp;")}</text>
+    </svg>
+  `;
+
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
+function openArticle(article: HomeArticle) {
+  window.location.assign(`${backendOrigin}${getArticleDetailPath(article)}`);
+}
 </script>
 
 <style scoped>
 .hero-section {
-  padding: 32px 0;
+  padding: 42px 0 10px;
 }
 
-.featured-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.featured-card {
-  min-width: 0;
-  overflow: hidden;
-  border-radius: 12px;
+.hero-panel {
   background: #ffffff;
-  cursor: pointer;
-  transition: box-shadow 0.2s ease;
+  padding: 34px 0 12px;
 }
 
-.featured-card:hover {
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.14);
+.hero-panel::after {
+  content: none;
 }
 
-.featured-card__image-wrap {
-  height: 144px;
-  overflow: hidden;
-}
-
-.featured-card__image {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.featured-card__body {
-  padding: 12px;
-}
-
-.featured-card__title {
-  margin: 0 0 8px;
-  color: #111827;
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1.45;
-}
-
-.featured-card__tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-bottom: 8px;
-}
-
-.featured-card__tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-}
-
-.featured-card__dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-}
-
-.featured-card__meta {
-  color: #9ca3af;
-  font-size: 11px;
-}
-
-.home-content {
-  padding-top: 24px;
-  padding-bottom: 24px;
-}
-
-.home-main {
-  display: flex;
-  gap: 24px;
-}
-
-.article-list {
-  flex: 1;
-  min-width: 0;
-  padding: 0 20px;
-}
-
-.article-item {
-  display: flex;
-  gap: 12px;
-  padding: 16px 0;
-  border-bottom: 1px solid #f3f4f6;
-}
-
-.article-item:last-of-type {
-  border-bottom: 0;
-}
-
-.article-item__content {
-  flex: 1;
-  min-width: 0;
-}
-
-.article-item__head {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  margin-bottom: 6px;
-}
-
-.article-item__badge {
-  margin-top: 2px;
-  border-radius: 6px;
-  background: #f59e0b;
-  padding: 2px 6px;
-  color: #ffffff;
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.article-item__title {
-  margin: 0;
-  color: #111827;
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 1.4;
-  cursor: pointer;
-  transition: opacity 0.2s ease;
-}
-
-.article-item__title:hover {
-  opacity: 0.75;
-}
-
-.article-item__title.featured {
-  color: #d97706;
-}
-
-.article-item__summary {
-  margin: 0 0 10px;
-  color: #6b7280;
-  font-size: 13px;
-  line-height: 1.6;
-}
-
-.article-item__meta {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.article-item__author {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: #6b7280;
-  font-size: 12px;
-}
-
-.dot-separator {
-  color: #d1d5db;
-}
-
-.article-item__stats {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-left: auto;
-  color: #9ca3af;
-  font-size: 12px;
-}
-
-.article-item__stats span {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.article-item__tags {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-left: 8px;
-  flex-wrap: wrap;
-}
-
-.article-item__tag {
-  border-radius: 999px;
-  padding: 2px 8px;
-  font-size: 11px;
-}
-
-.article-item__thumb {
-  width: 96px;
-  height: 64px;
-  overflow: hidden;
-  border-radius: 10px;
-  cursor: pointer;
-}
-
-.article-item__thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.article-list__footer {
-  padding: 16px 0;
+.hero-panel__inner {
+  position: relative;
+  z-index: 1;
+  max-width: 980px;
+  margin: 0 auto;
   text-align: center;
 }
 
-.article-list__more {
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  padding: 8px 24px;
+.hero-panel__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  margin: 0;
+  border: 1px solid rgba(148, 163, 184, 0.32);
+  border-radius: 999px;
+  padding: 0 18px;
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.hero-panel__title {
+  margin: 28px 0 18px;
+  color: #111827;
+  font-family: "Noto Serif SC", "Songti SC", "STSong", serif;
+  font-size: clamp(46px, 7vw, 78px);
+  font-weight: 600;
+  letter-spacing: -0.05em;
+  line-height: 1.04;
+}
+
+.hero-panel__description {
+  max-width: 760px;
+  margin: 0 auto;
+  color: #6b7280;
+  font-size: 16px;
+  line-height: 1.95;
+}
+
+.hero-panel__divider {
+  width: min(100%, 292px);
+  height: 1px;
+  margin: 28px auto 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(148, 163, 184, 0.34) 20%, rgba(148, 163, 184, 0.34) 80%, transparent 100%);
+}
+
+.hero-card-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 34px;
+}
+
+.hero-card {
+  display: flex;
+  min-height: 128px;
+  flex-direction: column;
+  gap: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.76);
+  padding: 16px 18px 18px;
+  text-align: left;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+  backdrop-filter: blur(10px);
+}
+
+.hero-card--clickable {
+  cursor: pointer;
+}
+
+.hero-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(249, 115, 22, 0.2);
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 18px 34px rgba(15, 23, 42, 0.06);
+}
+
+.hero-card__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.hero-card__label {
+  margin: 0;
+  color: #7c6f64;
+  font-family: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+}
+
+.hero-card__arrow {
+  flex-shrink: 0;
+  color: #9ca3af;
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.hero-card:hover .hero-card__arrow {
+  transform: translateX(2px);
+  color: #111827;
+}
+
+.hero-card__title {
+  margin: 0;
+  color: #111827;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.hero-card__summary {
+  margin: 0;
   color: #6b7280;
   font-size: 13px;
-  cursor: pointer;
-  transition: border-color 0.2s ease, color 0.2s ease;
+  line-height: 1.75;
 }
 
-.article-list__more:hover {
-  border-color: #d1d5db;
+.hero-category-section {
+  padding: 8px 0 0;
+  background: #ffffff;
+}
+
+.hero-category-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 0 0 22px;
+  border-bottom: 1px solid #ececec;
+}
+
+.hero-category {
+  min-height: 42px;
+  border: 1px solid #d1d5db;
+  border-radius: 999px;
+  padding: 0 18px;
   color: #374151;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
 }
 
-.article-list__empty {
+.hero-category:hover,
+.hero-category.active {
+  color: #111827;
+  border-color: #111827;
+  transform: translateY(-1px);
+}
+
+.hero-category.active {
+  background: #111827;
+  color: #ffffff;
+}
+
+.home-content {
+  padding-top: 28px;
+  padding-bottom: 36px;
+  background: #ffffff;
+}
+
+.article-list {
+  padding: 0;
+}
+
+.article-loading {
+  display: grid;
+  gap: 24px;
+}
+
+.article-loading__header {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.article-loading__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 999px;
+  padding: 0 14px;
+  color: #7c6f64;
+  font-family: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+}
+
+.article-loading__title {
+  margin: 0;
+  color: #4b5563;
+  font-family: "Noto Serif SC", "Songti SC", "STSong", serif;
+  font-size: 20px;
+  line-height: 1.5;
+}
+
+.article-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 34px 30px;
+}
+
+.article-grid--loading {
+  gap: 30px;
+}
+
+.article-card {
+  min-width: 0;
+  cursor: pointer;
+}
+
+.article-card--skeleton {
+  cursor: default;
+}
+
+.article-card__topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  color: #3f3f46;
+  font-family: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+  font-size: 14px;
+  letter-spacing: 0.02em;
+}
+
+.article-card__type,
+.article-card__serial {
+  white-space: nowrap;
+}
+
+.article-card__image-wrap {
+  overflow: hidden;
+  border: 1px solid rgba(17, 24, 39, 0.08);
+  border-radius: 16px;
+  background: #f8fafc;
+  aspect-ratio: 1.48 / 1;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.4);
+}
+
+.article-card__image-wrap--skeleton {
+  border-color: rgba(148, 163, 184, 0.12);
+  box-shadow: none;
+}
+
+.article-card__image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.38s ease, filter 0.38s ease;
+}
+
+.article-card:hover .article-card__image {
+  transform: scale(1.06);
+  filter: saturate(1.08);
+}
+
+.article-card__title {
+  margin: 14px 0 8px;
+  color: #111827;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.article-card__summary {
+  margin: 0;
+  color: #6b7280;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.article-card__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.article-card__author {
+  min-width: 0;
+}
+
+.article-card__views {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.article-card__title-skeleton,
+.article-card__summary-skeleton {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.article-skeleton {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(226, 232, 240, 0.72) 0%, rgba(241, 245, 249, 0.98) 50%, rgba(226, 232, 240, 0.72) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.35s ease-in-out infinite;
+}
+
+.article-skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.46) 50%, transparent 100%);
+  transform: translateX(-100%);
+  animation: sweep 1.35s ease-in-out infinite;
+}
+
+.article-skeleton--type {
+  width: 104px;
+  height: 16px;
+}
+
+.article-skeleton--serial {
+  width: 54px;
+  height: 16px;
+}
+
+.article-skeleton--image {
+  width: 100%;
+  height: 100%;
+  border-radius: 16px;
+}
+
+.article-skeleton--title {
+  height: 18px;
+}
+
+.article-skeleton--title-wide {
+  width: 88%;
+}
+
+.article-skeleton--title-narrow {
+  width: 62%;
+}
+
+.article-skeleton--summary {
+  height: 14px;
+  width: 100%;
+}
+
+.article-skeleton--summary-short {
+  width: 74%;
+}
+
+.article-skeleton--meta {
+  width: 92px;
+  height: 14px;
+}
+
+.article-skeleton--meta-short {
+  width: 68px;
+}
+
+.article-list__state {
   padding: 64px 0;
   color: #9ca3af;
   font-size: 14px;
   text-align: center;
 }
 
-.home-sidebar {
-  width: 256px;
-  flex-shrink: 0;
+.article-list__state--error {
+  color: #dc2626;
 }
 
-.sidebar-card {
-  padding: 16px;
-  margin-bottom: 16px;
-}
-
-.sidebar-card__title {
-  margin: 0 0 12px;
-  color: #111827;
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.sidebar-announcement {
-  padding-bottom: 12px;
-  border-bottom: 1px solid #f9fafb;
-  margin-bottom: 12px;
-}
-
-.sidebar-announcement:last-child {
-  padding-bottom: 0;
-  margin-bottom: 0;
-  border-bottom: 0;
-}
-
-.sidebar-announcement__row {
+.pagination {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.sidebar-announcement__title {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: #1f2937;
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.sidebar-announcement__badge,
-.sidebar-announcement__btn {
-  border-radius: 6px;
-  background: #f59e0b;
-  color: #ffffff;
-  font-size: 10px;
-  font-weight: 600;
-}
-
-.sidebar-announcement__badge {
-  padding: 2px 6px;
-}
-
-.sidebar-announcement__btn {
-  padding: 4px 10px;
-  font-size: 11px;
-  cursor: pointer;
-}
-
-.sidebar-announcement__desc {
-  margin: 6px 0 0;
-  color: #9ca3af;
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-.sidebar-banner {
-  margin-bottom: 16px;
-  border-radius: 16px;
-  padding: 16px;
-  color: #ffffff;
-}
-
-.sidebar-banner__title {
-  margin-bottom: 8px;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.sidebar-banner__desc {
-  margin: 0 0 12px;
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-.sidebar-banner__btn {
-  width: 100%;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.2);
-  padding: 6px 12px;
-  color: #ffffff;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.sidebar-banner__btn:hover {
-  background: rgba(255, 255, 255, 0.3);
-}
-
-.sidebar-hot {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  margin-bottom: 12px;
-}
-
-.sidebar-hot:last-child {
-  margin-bottom: 0;
-}
-
-.sidebar-hot__index {
-  display: inline-flex;
-  width: 20px;
-  height: 20px;
-  flex-shrink: 0;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  border-radius: 6px;
-  background: #d1d5db;
-  color: #ffffff;
-  font-size: 11px;
-  font-weight: 700;
+  gap: 12px;
+  margin-top: 42px;
 }
 
-.sidebar-hot__index.top {
-  background: #f59e0b;
-}
-
-.sidebar-hot__title {
-  margin: 2px 0 0;
-  color: #6b7280;
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-.sidebar-quick {
-  border: 1px solid #f3f4f6;
-  border-radius: 16px;
-  background: #f9fafb;
-  padding: 16px;
-}
-
-.sidebar-quick__grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.sidebar-quick__item {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  border: 1px solid #f3f4f6;
-  border-radius: 10px;
-  background: #ffffff;
-  padding: 10px;
-  text-align: left;
+.pagination__item {
+  min-width: 44px;
+  min-height: 44px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 0 14px;
+  background: transparent;
+  color: #4b5563;
+  font-size: 16px;
   cursor: pointer;
-  transition: border-color 0.2s ease;
+  transition: background-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
 }
 
-.sidebar-quick__item:hover {
-  border-color: #e5e7eb;
+.pagination__item:hover:not(:disabled) {
+  transform: translateY(-1px);
+  color: #111827;
 }
 
-.sidebar-quick__label {
-  color: #374151;
-  font-size: 12px;
-  font-weight: 500;
+.pagination__item.active {
+  background: #5d6776;
+  color: #ffffff;
 }
 
-.sidebar-quick__desc {
-  color: #9ca3af;
-  font-size: 11px;
+.pagination__item:disabled {
+  color: #c0c4cc;
+  cursor: not-allowed;
 }
 
-@media (max-width: 1024px) {
-  .home-main {
-    display: block;
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -200% 0;
   }
 }
 
-@media (max-width: 900px) {
-  .featured-grid {
+@keyframes sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@media (max-width: 1024px) {
+  .hero-card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .article-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
+@media (max-width: 900px) {
+  .hero-panel {
+    padding: 28px 0 10px;
+  }
+}
+
 @media (max-width: 768px) {
-  .hero-section {
-    display: none;
+  .hero-panel__title {
+    margin-top: 24px;
+    font-size: clamp(38px, 14vw, 58px);
+  }
+
+  .hero-panel__description {
+    font-size: 15px;
+    line-height: 1.9;
+  }
+
+  .hero-card-grid {
+    gap: 12px;
+  }
+
+  .article-loading {
+    gap: 20px;
+  }
+
+  .article-loading__title {
+    font-size: 18px;
+  }
+
+  .pagination {
+    gap: 8px;
+  }
+
+  .pagination__item {
+    min-width: 40px;
+    min-height: 40px;
+    font-size: 14px;
+    padding: 0 12px;
   }
 }
 
 @media (max-width: 640px) {
-  .featured-grid {
+  .hero-section {
+    padding-top: 18px;
+  }
+
+  .hero-panel {
+    border-radius: 26px;
+    padding: 34px 18px 18px;
+  }
+
+  .hero-panel__eyebrow {
+    min-height: 36px;
+    padding: 0 14px;
+  }
+
+  .hero-panel__description {
+    font-size: 14px;
+  }
+
+  .hero-category-section {
+    padding-top: 14px;
+  }
+
+  .hero-category-bar {
+    gap: 10px;
+    padding-bottom: 18px;
+  }
+
+  .hero-category {
+    min-height: 38px;
+    padding: 0 14px;
+    font-size: 13px;
+  }
+
+  .hero-card {
+    min-height: 118px;
+    border-radius: 18px;
+    padding: 14px 16px 16px;
+  }
+
+  .hero-card__title {
+    font-size: 16px;
+  }
+
+  .article-grid {
     grid-template-columns: 1fr;
+    gap: 20px;
   }
 
-  .article-item {
-    flex-direction: column;
-  }
-
-  .article-item__stats {
-    margin-left: 0;
-  }
-
-  .article-item__tags {
-    margin-left: 0;
+  .article-loading__title {
+    font-size: 17px;
   }
 }
 </style>
