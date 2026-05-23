@@ -16,6 +16,10 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (value) => value.replace(/^\/api/, ""),
       },
+      "/web": {
+        target: "http://localhost:8080",
+        changeOrigin: true,
+      },
     },
   },
 });

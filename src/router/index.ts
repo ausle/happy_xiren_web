@@ -17,6 +17,11 @@ const routes = [
         component: () => import("@/views/TrafficPage.vue"),
       },
       {
+        path: "docs",
+        name: "docs",
+        component: () => import("@/views/DocsPage.vue"),
+      },
+      {
         path: "traffic/youtube",
         name: "youtube",
         component: () => import("@/views/YouTubePage.vue"),
@@ -37,7 +42,8 @@ const routes = [
         component: () => import("@/views/RisingChannelsPage.vue"),
       },
       {
-        path: "article/:id",
+        path: "article/detail/:id/:slug?",
+        alias: "article/:id",
         name: "article",
         component: () => import("@/views/ArticlePage.vue"),
       },

@@ -9,12 +9,19 @@
             <RouterLink class="site-nav__item" :class="{ active: route.path === '/' }" to="/">首页</RouterLink>
             <RouterLink class="site-nav__item" :class="{ active: route.path.startsWith('/traffic') }" to="/traffic">流量</RouterLink>
             <button class="site-nav__item" type="button">创作</button>
-            <button class="site-nav__item" type="button">文档</button>
+            <RouterLink class="site-nav__item" :class="{ active: route.path.startsWith('/docs') }" to="/docs">文档</RouterLink>
           </nav>
         </div>
         <div class="site-header__right">
           <template v-if="authStore.loggedIn">
-            <button class="write-trigger brand-gradient" type="button" @click="openArticleEditor">写文章</button>
+            <button
+              class="write-trigger brand-gradient"
+              :disabled="openingEditor"
+              type="button"
+              @click="openArticleEditor"
+            >
+              {{ openingEditor ? "准备中..." : "写文章" }}
+            </button>
 
             <div ref="userMenuRef" class="user-menu" :class="{ 'user-menu--open': userMenuOpen }">
               <button class="user-menu__trigger" type="button" @click="toggleUserMenu">
@@ -55,7 +62,7 @@
           <RouterLink class="site-nav__item" :class="{ active: route.path === '/' }" to="/">首页</RouterLink>
           <RouterLink class="site-nav__item" :class="{ active: route.path.startsWith('/traffic') }" to="/traffic">流量</RouterLink>
           <button class="site-nav__item" type="button">创作</button>
-          <button class="site-nav__item" type="button">文档</button>
+          <RouterLink class="site-nav__item" :class="{ active: route.path.startsWith('/docs') }" to="/docs">文档</RouterLink>
         </nav>
       </div>
 
@@ -80,9 +87,11 @@
 </template>
 
 <script setup lang="ts">
+import { ElMessage } from "element-plus";
 import { ChevronDown } from "lucide-vue-next";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
+import { ensureArticleEditorReady, extractApiErrorMessage } from "@/api/write";
 import BaseAvatar from "@/components/common/BaseAvatar.vue";
 import LoginDialog from "@/components/common/LoginDialog.vue";
 import SiteLogo from "@/components/common/SiteLogo.vue";
@@ -97,6 +106,7 @@ const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "/api";
 const userMenuOpen = ref(false);
 const avatarLoadError = ref(false);
 const userMenuRef = ref<HTMLElement | null>(null);
+const openingEditor = ref(false);
 
 const backendOrigin = computed(() => {
   if (apiBaseUrl.startsWith("http://") || apiBaseUrl.startsWith("https://")) {
@@ -148,9 +158,20 @@ const openInNewTab = (url: string) => {
   window.open(url, "_blank", "noopener");
 };
 
-const openArticleEditor = () => {
-  const articleEditorUrl = router.resolve({ name: "write-article" }).href;
-  window.open(articleEditorUrl, "_blank", "noopener");
+const openArticleEditor = async () => {
+  if (openingEditor.value) return;
+
+  openingEditor.value = true;
+
+  try {
+    await ensureArticleEditorReady(backendOrigin.value);
+    const articleEditorUrl = router.resolve({ name: "write-article" }).href;
+    window.open(articleEditorUrl, "_blank", "noopener");
+  } catch (value) {
+    ElMessage.error(extractApiErrorMessage(value));
+  } finally {
+    openingEditor.value = false;
+  }
 };
 
 const openAdminCenter = () => {
@@ -297,6 +318,11 @@ onBeforeUnmount(() => {
 .write-trigger:active {
   transform: translateY(1px) scale(0.98);
   box-shadow: 0 8px 16px rgba(244, 131, 10, 0.2);
+}
+
+.write-trigger:disabled {
+  cursor: wait;
+  opacity: 0.78;
 }
 
 .user-menu {

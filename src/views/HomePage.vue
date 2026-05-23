@@ -65,11 +65,6 @@
               :key="placeholder"
               class="article-card article-card--skeleton"
             >
-              <div class="article-card__topline">
-                <span class="article-skeleton article-skeleton--type" />
-                <span class="article-skeleton article-skeleton--serial" />
-              </div>
-
               <div class="article-card__image-wrap article-card__image-wrap--skeleton">
                 <span class="article-skeleton article-skeleton--image" />
               </div>
@@ -104,11 +99,6 @@
               class="article-card"
               @click="openArticle(article)"
             >
-              <div class="article-card__topline">
-                <span class="article-card__type">{{ getArticleDisplayType(article) }}</span>
-                <span class="article-card__serial">({{ formatArticleSerial(index) }})</span>
-              </div>
-
               <div class="article-card__image-wrap">
                 <img
                   :src="getArticleCover(article, index)"
@@ -118,16 +108,27 @@
               </div>
 
               <h3 class="article-card__title line-clamp-2">{{ article.title }}</h3>
-              <p class="article-card__summary line-clamp-2">
+              <p class="article-card__summary">
                 {{ article.summary || article.shortTitle || "暂无摘要" }}
               </p>
 
               <div class="article-card__meta">
                 <span class="article-card__author">{{ article.authorName || "匿名作者" }}</span>
-                <span class="article-card__views">
-                  <Eye :size="14" />
-                  {{ formatCount(article.count?.readCount) }}
-                </span>
+                <div class="article-card__meta-right">
+                  <div v-if="getArticleTags(article).length" class="article-card__tags">
+                    <span
+                      v-for="tag in getArticleTags(article)"
+                      :key="`${article.articleId}-${tag}`"
+                      class="article-card__tag"
+                    >
+                      {{ tag }}
+                    </span>
+                  </div>
+                  <span class="article-card__views">
+                    <Eye :size="14" />
+                    {{ formatCount(article.count?.readCount) }}
+                  </span>
+                </div>
               </div>
             </article>
           </div>
@@ -174,6 +175,7 @@
 <script setup lang="ts">
 import { ArrowRight, Eye } from "lucide-vue-next";
 import { computed, onMounted, ref, watch } from "vue";
+import { useRouter } from "vue-router";
 import { fetchCategoryArticles, fetchHomeIndex } from "@/api/home";
 import { DEFAULT_HOME_CATEGORY, useUiStore } from "@/stores/ui";
 import type { CategoryArticleListResponse, HomeArticle } from "@/types/home";
@@ -189,7 +191,7 @@ const DEFAULT_PAGE_SIZE = 12;
 const MAX_VISIBLE_PAGES = 7;
 
 const uiStore = useUiStore();
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "/api";
+const router = useRouter();
 const loading = ref(false);
 const errorMessage = ref("");
 const displayArticles = ref<HomeArticle[]>([]);
@@ -217,15 +219,6 @@ const portfolioCards: PortfolioCard[] = [
     summary: "沉淀模板、工具和实验性小项目，持续更新中。",
   },
 ];
-
-const backendOrigin = (() => {
-  if (apiBaseUrl.startsWith("http://") || apiBaseUrl.startsWith("https://")) {
-    return new URL(apiBaseUrl).origin;
-  }
-
-  const isLocalHost = ["localhost", "127.0.0.1"].includes(window.location.hostname);
-  return isLocalHost ? "http://localhost:8080" : window.location.origin;
-})();
 
 const articleCategories = computed(() => {
   const categories = uiStore.homeCategoryNames.filter(Boolean);
@@ -355,11 +348,6 @@ function formatCount(value?: number | null) {
   return `${value}`;
 }
 
-function getArticleDetailPath(article: HomeArticle) {
-  const slug = article.urlSlug ? `/${encodeURIComponent(article.urlSlug)}` : "";
-  return `/article/detail/${article.articleId}${slug}`;
-}
-
 function getArticleDisplayType(article: HomeArticle) {
   const tag = getArticleTags(article)[0];
   const mapping: Record<string, string> = {
@@ -371,11 +359,6 @@ function getArticleDisplayType(article: HomeArticle) {
     源码: "Source",
   };
   return `- ${mapping[tag ?? ""] ?? "Article"} -`;
-}
-
-function formatArticleSerial(index: number) {
-  const serial = Math.max(displayArticles.value.length - index, 1);
-  return `${serial}`.padStart(3, "0");
 }
 
 function getArticleCover(article: HomeArticle, index: number) {
@@ -412,7 +395,13 @@ function getArticleCover(article: HomeArticle, index: number) {
 }
 
 function openArticle(article: HomeArticle) {
-  window.location.assign(`${backendOrigin}${getArticleDetailPath(article)}`);
+  void router.push({
+    name: "article",
+    params: {
+      id: article.articleId,
+      slug: article.urlSlug || undefined,
+    },
+  });
 }
 </script>
 
@@ -655,23 +644,6 @@ function openArticle(article: HomeArticle) {
   cursor: default;
 }
 
-.article-card__topline {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 14px;
-  color: #3f3f46;
-  font-family: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
-  font-size: 14px;
-  letter-spacing: 0.02em;
-}
-
-.article-card__type,
-.article-card__serial {
-  white-space: nowrap;
-}
-
 .article-card__image-wrap {
   overflow: hidden;
   border: 1px solid rgba(17, 24, 39, 0.08);
@@ -708,14 +680,22 @@ function openArticle(article: HomeArticle) {
 
 .article-card__summary {
   margin: 0;
+  display: -webkit-box;
   color: #6b7280;
   font-size: 13px;
   line-height: 1.7;
+  overflow: hidden;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  min-height: calc(1.7em * 3);
+  max-height: calc(1.7em * 3);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
 }
 
 .article-card__meta {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
   gap: 12px;
   margin-top: 14px;
@@ -725,6 +705,28 @@ function openArticle(article: HomeArticle) {
 
 .article-card__author {
   min-width: 0;
+}
+
+.article-card__meta-right {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.article-card__tags {
+  display: flex;
+  max-width: 140px;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 14px;
+  text-align: right;
+}
+
+.article-card__tag {
+  color: #7c6f64;
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 .article-card__views {
@@ -758,16 +760,6 @@ function openArticle(article: HomeArticle) {
   background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.46) 50%, transparent 100%);
   transform: translateX(-100%);
   animation: sweep 1.35s ease-in-out infinite;
-}
-
-.article-skeleton--type {
-  width: 104px;
-  height: 16px;
-}
-
-.article-skeleton--serial {
-  width: 54px;
-  height: 16px;
 }
 
 .article-skeleton--image {
