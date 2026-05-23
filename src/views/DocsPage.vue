@@ -27,6 +27,56 @@
             {{ tab }}
           </button>
         </div>
+        <nav v-if="showPagination" class="docs-pagination pagination" aria-label="Search pagination">
+          <button class="pagination__item" :disabled="currentSearchPage <= 1" type="button" @click="goToPage(1)">
+            首页
+          </button>
+          <button class="pagination__item" :disabled="currentSearchPage <= 1" type="button" @click="goToPage(currentSearchPage - 1)">
+            上一页
+          </button>
+          <button
+            v-for="page in visiblePageNumbers"
+            :key="page"
+            class="pagination__item"
+            :class="{ active: page === currentSearchPage }"
+            type="button"
+            @click="goToPage(page)"
+          >
+            {{ page }}
+          </button>
+          <button class="pagination__item" :disabled="currentSearchPage >= pageTotal" type="button" @click="goToPage(currentSearchPage + 1)">
+            下一页
+          </button>
+          <button class="pagination__item" :disabled="currentSearchPage >= pageTotal" type="button" @click="goToPage(pageTotal)">
+            尾页
+          </button>
+        </nav>
+
+        <ElDialog
+          v-model="picturePreviewVisible"
+          class="picture-preview-dialog"
+          width="1120px"
+          :show-close="true"
+          :destroy-on-close="true"
+          align-center
+        >
+          <template #header>
+            <div class="picture-preview-dialog__title">{{ activePicture?.title || "图片预览" }}</div>
+          </template>
+
+          <div class="picture-preview">
+            <div class="picture-preview__media">
+              <img
+                v-if="activePicture?.url"
+                :src="activePicture.url"
+                :alt="activePicture.title || '图片预览'"
+                class="picture-preview__image"
+              />
+              <div v-else class="picture-preview__empty">暂无可预览图片</div>
+            </div>
+            <p v-if="activePicture?.description" class="picture-preview__description">{{ activePicture.description }}</p>
+          </div>
+        </ElDialog>
       </section>
 
       <section class="docs-results">
@@ -42,10 +92,40 @@
           </div>
         </div>
 
-        <div v-if="loading" class="panel docs-empty-state">
-          <p class="docs-empty-state__title">正在加载数据</p>
-          <p class="docs-empty-state__text">正在按分页拉取全部结果，请稍候。</p>
-        </div>
+        <div v-if="loading" class="article-loading" aria-live="polite" aria-busy="true">
+          <div class="article-loading__header">
+            <span class="article-loading__eyebrow">CURATED POSTS</span>
+            <p class="article-loading__title">正在整理这一页的内容</p>
+          </div>
+
+          <div class="article-grid article-grid--loading">
+            <article
+              v-for="placeholder in loadingPlaceholders"
+              :key="placeholder"
+              class="article-card article-card--skeleton"
+            >
+              <div class="article-card__image-wrap article-card__image-wrap--skeleton">
+                <span class="article-skeleton article-skeleton--image" />
+              </div>
+
+              <div class="article-card__title-skeleton">
+                <span class="article-skeleton article-skeleton--title article-skeleton--title-wide" />
+                <span class="article-skeleton article-skeleton--title article-skeleton--title-narrow" />
+              </div>
+
+              <div class="article-card__summary-skeleton">
+                <span class="article-skeleton article-skeleton--summary" />
+                <span class="article-skeleton article-skeleton--summary article-skeleton--summary-short" />
+              </div>
+
+              <div class="article-card__meta">
+                <span class="article-skeleton article-skeleton--meta" />
+                <span class="article-skeleton article-skeleton--meta article-skeleton--meta-short" />
+              </div>
+            </article>
+            </div>
+
+          </div>
 
         <div v-else-if="errorMessage" class="panel docs-empty-state">
           <p class="docs-empty-state__title">加载失败</p>
@@ -59,58 +139,41 @@
                 <h2 class="docs-section__title">文章</h2>
                 <span class="docs-section__count">{{ articleResults.length }}</span>
               </div>
-              <div class="docs-result-list">
-                <article v-for="item in articleResults" :key="`article-${item.id ?? item.title}`" class="panel docs-card">
-                  <div class="docs-card__top">
-                    <div class="docs-card__author">
-                      <div class="docs-avatar">
-                        <img
-                          v-if="item.user?.userAvatar"
-                          :src="item.user.userAvatar"
-                          :alt="item.user?.userName || '用户头像'"
-                          class="docs-avatar__image"
-                        />
-                        <BaseAvatar
-                          v-else
-                          :initials="getUserInitials(item.user?.userName)"
-                          :size="48"
-                          color="#d4a43a"
-                          rounded="999px"
-                        />
+              <div class="article-grid">
+                <article
+                  v-for="(article, index) in articleResults"
+                  :key="`article-${article.id ?? article.title}`"
+                  class="article-card"
+                  @click="openArticle(article)"
+                >
+                  <div class="article-card__image-wrap">
+                    <img
+                      :src="getArticleCover(article, index)"
+                      :alt="article.title || '文章封面'"
+                      class="article-card__image"
+                    />
+                  </div>
+
+                  <h3 class="article-card__title line-clamp-2">{{ article.title || "未命名文章" }}</h3>
+                  <p class="article-card__summary">{{ article.summary || article.shortTitle || "暂无摘要" }}</p>
+
+                  <div class="article-card__meta">
+                    <span class="article-card__author">{{ article.user?.userName || "匿名作者" }}</span>
+                    <div class="article-card__meta-right">
+                      <div v-if="getArticleTags(article).length" class="article-card__tags">
+                        <span
+                          v-for="tag in getArticleTags(article)"
+                          :key="`${article.id}-${tag}`"
+                          class="article-card__tag"
+                        >
+                          {{ tag }}
+                        </span>
                       </div>
-                      <div class="docs-card__author-body">
-                        <button class="docs-card__author-name" type="button" @click="openAuthor(item.user?.userName)">
-                          {{ item.user?.userName || "匿名用户" }}
-                        </button>
-                        <p class="docs-card__author-meta">
-                          <CalendarDays :size="13" />
-                          <span>{{ formatDate(item.createTime) }}</span>
-                        </p>
-                      </div>
+                      <span class="article-card__views">
+                        <Eye :size="14" />
+                        {{ formatCount(article.readNum) }}
+                      </span>
                     </div>
-                    <span class="docs-card__type">文章</span>
-                  </div>
-
-                  <button class="docs-card__title docs-card__title--button" type="button" @click="openArticle(item.id)">
-                    {{ item.title || "未命名文章" }}
-                  </button>
-                  <p class="docs-card__excerpt">{{ getArticleExcerpt(item.content) }}</p>
-
-                  <div v-if="item.tagList?.length" class="docs-card__tags">
-                    <span v-for="tag in item.tagList" :key="`${item.id}-${tag}`" class="docs-card__tag">
-                      {{ tag }}
-                    </span>
-                  </div>
-
-                  <div class="docs-card__meta">
-                    <span>
-                      <ThumbsUp :size="14" />
-                      {{ formatCount(item.thumbNum ?? 0) }}
-                    </span>
-                    <span>
-                      <Bookmark :size="14" />
-                      {{ formatCount(item.favourNum ?? 0) }}
-                    </span>
                   </div>
                 </article>
               </div>
@@ -126,10 +189,12 @@
                   v-for="item in pictureResults"
                   :key="`picture-${item.url ?? item.title}`"
                   class="panel docs-picture-card"
+                  @click="openPicturePreview(item)"
                 >
                   <img v-if="item.url" :src="item.url" :alt="item.title || '图片'" class="docs-picture-card__image" loading="lazy" />
                   <div v-else class="docs-picture-card__placeholder">暂无图片</div>
                   <p class="docs-picture-card__title">{{ item.title || "未命名图片" }}</p>
+                  <p v-if="item.description" class="docs-picture-card__description">{{ item.description }}</p>
                 </article>
               </div>
             </section>
@@ -174,60 +239,218 @@
         </template>
 
         <template v-else-if="activeTab === '文章'">
-          <div v-if="articleResults.length" class="docs-result-list">
-            <article v-for="item in articleResults" :key="`article-${item.id ?? item.title}`" class="panel docs-card">
-              <div class="docs-card__top">
-                <div class="docs-card__author">
-                  <div class="docs-avatar">
-                    <img
-                      v-if="item.user?.userAvatar"
-                      :src="item.user.userAvatar"
-                      :alt="item.user?.userName || '用户头像'"
-                      class="docs-avatar__image"
-                    />
-                    <BaseAvatar
-                      v-else
-                      :initials="getUserInitials(item.user?.userName)"
-                      :size="48"
-                      color="#d4a43a"
-                      rounded="999px"
-                    />
+          <div v-if="articleResults.length">
+            <div class="article-grid">
+            <article
+              v-for="(article, index) in articleResults"
+              :key="`article-${article.id ?? article.title}`"
+              class="article-card"
+              @click="openArticle(article)"
+            >
+              <div class="article-card__image-wrap">
+                <img
+                  :src="getArticleCover(article, index)"
+                  :alt="article.title || '文章封面'"
+                  class="article-card__image"
+                />
+              </div>
+
+              <h3 class="article-card__title line-clamp-2">{{ article.title || "未命名文章" }}</h3>
+              <p class="article-card__summary">{{ article.summary || article.shortTitle || "暂无摘要" }}</p>
+
+              <div class="article-card__meta">
+                <span class="article-card__author">{{ article.user?.userName || "匿名作者" }}</span>
+                <div class="article-card__meta-right">
+                  <div v-if="getArticleTags(article).length" class="article-card__tags">
+                    <span
+                      v-for="tag in getArticleTags(article)"
+                      :key="`${article.id}-${tag}`"
+                      class="article-card__tag"
+                    >
+                      {{ tag }}
+                    </span>
                   </div>
-                  <div class="docs-card__author-body">
-                    <button class="docs-card__author-name" type="button" @click="openAuthor(item.user?.userName)">
-                      {{ item.user?.userName || "匿名用户" }}
-                    </button>
-                    <p class="docs-card__author-meta">
-                      <CalendarDays :size="13" />
-                      <span>{{ formatDate(item.createTime) }}</span>
-                    </p>
-                  </div>
+                  <span class="article-card__views">
+                    <Eye :size="14" />
+                    {{ formatCount(article.readNum) }}
+                  </span>
                 </div>
-                <span class="docs-card__type">文章</span>
               </div>
+              </article>
+            </div>
 
-              <button class="docs-card__title docs-card__title--button" type="button" @click="openArticle(item.id)">
-                {{ item.title || "未命名文章" }}
+            <nav v-if="showPagination" class="pagination" aria-label="Search pagination">
+              <button class="pagination__item" :disabled="currentSearchPage <= 1" type="button" @click="goToPage(1)">
+                首页
               </button>
-              <p class="docs-card__excerpt">{{ getArticleExcerpt(item.content) }}</p>
+              <button class="pagination__item" :disabled="currentSearchPage <= 1" type="button" @click="goToPage(currentSearchPage - 1)">
+                上一页
+              </button>
+              <button
+                v-for="page in visiblePageNumbers"
+                :key="page"
+                class="pagination__item"
+                :class="{ active: page === currentSearchPage }"
+                type="button"
+                @click="goToPage(page)"
+              >
+                {{ page }}
+              </button>
+              <button class="pagination__item" :disabled="currentSearchPage >= pageTotal" type="button" @click="goToPage(currentSearchPage + 1)">
+                下一页
+              </button>
+              <button class="pagination__item" :disabled="currentSearchPage >= pageTotal" type="button" @click="goToPage(pageTotal)">
+                尾页
+              </button>
+            </nav>
 
-              <div v-if="item.tagList?.length" class="docs-card__tags">
-                <span v-for="tag in item.tagList" :key="`${item.id}-${tag}`" class="docs-card__tag">
-                  {{ tag }}
-                </span>
-              </div>
+            <nav v-if="false && showPagination" class="pagination" aria-label="Search pagination">
+              <button class="pagination__item" :disabled="currentSearchPage <= 1" type="button" @click="goToPage(1)">
+                首页
+              </button>
+              <button class="pagination__item" :disabled="currentSearchPage <= 1" type="button" @click="goToPage(currentSearchPage - 1)">
+                上一页
+              </button>
+              <button
+                v-for="page in visiblePageNumbers"
+                :key="page"
+                class="pagination__item"
+                :class="{ active: page === currentSearchPage }"
+                type="button"
+                @click="goToPage(page)"
+              >
+                {{ page }}
+              </button>
+              <button
+                v-for="page in visiblePageNumbers"
+                :key="page"
+                class="pagination__item"
+                :class="{ active: page === currentSearchPage }"
+                type="button"
+                @click="goToPage(page)"
+              >
+                {{ page }}
+              </button>
+              <button class="pagination__item" :disabled="currentSearchPage >= pageTotal" type="button" @click="goToPage(currentSearchPage + 1)">
+                下一页
+              </button>
+              <button class="pagination__item" :disabled="currentSearchPage >= pageTotal" type="button" @click="goToPage(pageTotal)">
+                尾页
+              </button>
+            </nav>
 
-              <div class="docs-card__meta">
-                <span>
-                  <ThumbsUp :size="14" />
-                  {{ formatCount(item.thumbNum ?? 0) }}
-                </span>
-                <span>
-                  <Bookmark :size="14" />
-                  {{ formatCount(item.favourNum ?? 0) }}
-                </span>
-              </div>
-            </article>
+            <nav v-if="false && showPagination" class="pagination" aria-label="Search pagination">
+              <button class="pagination__item" :disabled="currentSearchPage <= 1" type="button" @click="goToPage(1)">
+                首页
+              </button>
+              <button class="pagination__item" :disabled="currentSearchPage <= 1" type="button" @click="goToPage(currentSearchPage - 1)">
+                上一页
+              </button>
+              <button
+                v-for="page in visiblePageNumbers"
+                :key="page"
+                class="pagination__item"
+                :class="{ active: page === currentSearchPage }"
+                type="button"
+                @click="goToPage(page)"
+              >
+                {{ page }}
+              </button>
+              <button class="pagination__item" :disabled="currentSearchPage >= pageTotal" type="button" @click="goToPage(currentSearchPage + 1)">
+                下一页
+              </button>
+              <button class="pagination__item" :disabled="currentSearchPage >= pageTotal" type="button" @click="goToPage(pageTotal)">
+                尾页
+              </button>
+            </nav>
+
+            <nav v-if="false && showPagination" class="pagination" aria-label="Search pagination">
+              <button class="pagination__item" :disabled="currentSearchPage <= 1" type="button" @click="goToPage(1)">
+                首页
+              </button>
+              <button class="pagination__item" :disabled="currentSearchPage <= 1" type="button" @click="goToPage(currentSearchPage - 1)">
+                上一页
+              </button>
+              <button
+                v-for="page in visiblePageNumbers"
+                :key="page"
+                class="pagination__item"
+                :class="{ active: page === currentSearchPage }"
+                type="button"
+                @click="goToPage(page)"
+              >
+                {{ page }}
+              </button>
+              <button class="pagination__item" :disabled="currentSearchPage >= pageTotal" type="button" @click="goToPage(currentSearchPage + 1)">
+                下一页
+              </button>
+              <button class="pagination__item" :disabled="currentSearchPage >= pageTotal" type="button" @click="goToPage(pageTotal)">
+                尾页
+              </button>
+            </nav>
+
+            <nav v-if="false && showPagination" class="pagination" aria-label="Search pagination">
+              <button class="pagination__item" :disabled="currentSearchPage <= 1" type="button" @click="goToPage(1)">
+                首页
+              </button>
+              <button class="pagination__item" :disabled="currentSearchPage <= 1" type="button" @click="goToPage(currentSearchPage - 1)">
+                上一页
+              </button>
+              <button class="pagination__item" :disabled="currentSearchPage >= pageTotal" type="button" @click="goToPage(currentSearchPage + 1)">
+                下一页
+              </button>
+              <button class="pagination__item" :disabled="currentSearchPage >= pageTotal" type="button" @click="goToPage(pageTotal)">
+                尾页
+              </button>
+            </nav>
+            <nav v-if="false && showPagination" class="pagination" aria-label="Search pagination">
+              <button class="pagination__item" :disabled="currentSearchPage <= 1" type="button" @click="goToPage(1)">
+                首页
+              </button>
+              <button class="pagination__item" :disabled="currentSearchPage <= 1" type="button" @click="goToPage(currentSearchPage - 1)">
+                上一页
+              </button>
+              <button
+                v-for="page in visiblePageNumbers"
+                :key="page"
+                class="pagination__item"
+                :class="{ active: page === currentSearchPage }"
+                type="button"
+                @click="goToPage(page)"
+              >
+                {{ page }}
+              </button>
+              <button class="pagination__item" :disabled="currentSearchPage >= pageTotal" type="button" @click="goToPage(currentSearchPage + 1)">
+                下一页
+              </button>
+              <button class="pagination__item" :disabled="currentSearchPage >= pageTotal" type="button" @click="goToPage(pageTotal)">
+                尾页
+              </button>
+            </nav>
+            <nav v-if="false && showPagination" class="pagination" aria-label="Search pagination">
+              <button class="pagination__item" :disabled="currentSearchPage <= 1" type="button" @click="goToPage(1)">
+                首页
+              </button>
+              <button class="pagination__item" :disabled="currentSearchPage <= 1" type="button" @click="goToPage(currentSearchPage - 1)">
+                上一页
+              </button>
+              <button
+                v-for="page in visiblePageNumbers"
+                :key="page"
+                class="pagination__item"
+                :class="{ active: page === currentSearchPage }"
+                type="button"
+                @click="goToPage(page)"
+              >
+                {{ page }}
+              </button>
+              <button class="pagination__item" :disabled="currentSearchPage >= pageTotal" type="button" @click="goToPage(currentSearchPage + 1)">
+                下一页
+              </button>
+              <button class="pagination__item" :disabled="currentSearchPage >= pageTotal" type="button" @click="goToPage(pageTotal)">
+                尾页
+              </button>
+            </nav>
           </div>
 
           <div v-else class="panel docs-empty-state">
@@ -237,16 +460,35 @@
         </template>
 
         <template v-else-if="activeTab === '图片'">
-          <div v-if="pictureResults.length" class="docs-picture-grid">
+          <div v-if="pictureResults.length">
+            <div class="docs-picture-grid">
             <article
               v-for="item in pictureResults"
               :key="`picture-${item.url ?? item.title}`"
               class="panel docs-picture-card"
+              @click="openPicturePreview(item)"
             >
               <img v-if="item.url" :src="item.url" :alt="item.title || '图片'" class="docs-picture-card__image" loading="lazy" />
               <div v-else class="docs-picture-card__placeholder">暂无图片</div>
               <p class="docs-picture-card__title">{{ item.title || "未命名图片" }}</p>
+              <p v-if="item.description" class="docs-picture-card__description">{{ item.description }}</p>
             </article>
+            </div>
+
+            <nav v-if="showPagination" class="pagination" aria-label="Search pagination">
+              <button class="pagination__item" :disabled="currentSearchPage <= 1" type="button" @click="goToPage(1)">
+                首页
+              </button>
+              <button class="pagination__item" :disabled="currentSearchPage <= 1" type="button" @click="goToPage(currentSearchPage - 1)">
+                上一页
+              </button>
+              <button class="pagination__item" :disabled="currentSearchPage >= pageTotal" type="button" @click="goToPage(currentSearchPage + 1)">
+                下一页
+              </button>
+              <button class="pagination__item" :disabled="currentSearchPage >= pageTotal" type="button" @click="goToPage(pageTotal)">
+                尾页
+              </button>
+            </nav>
           </div>
 
           <div v-else class="panel docs-empty-state">
@@ -287,13 +529,37 @@
             <p class="docs-empty-state__text">当前关键词下没有匹配的用户数据。</p>
           </div>
         </template>
+        <nav v-if="showPagination" class="docs-pagination pagination" aria-label="Search pagination">
+          <button class="pagination__item" :disabled="currentSearchPage <= 1" type="button" @click="goToPage(1)">
+            首页
+          </button>
+          <button class="pagination__item" :disabled="currentSearchPage <= 1" type="button" @click="goToPage(currentSearchPage - 1)">
+            上一页
+          </button>
+          <button
+            v-for="page in visiblePageNumbers"
+            :key="page"
+            class="pagination__item"
+            :class="{ active: page === currentSearchPage }"
+            type="button"
+            @click="goToPage(page)"
+          >
+            {{ page }}
+          </button>
+          <button class="pagination__item" :disabled="currentSearchPage >= pageTotal" type="button" @click="goToPage(currentSearchPage + 1)">
+            下一页
+          </button>
+          <button class="pagination__item" :disabled="currentSearchPage >= pageTotal" type="button" @click="goToPage(pageTotal)">
+            尾页
+          </button>
+        </nav>
       </section>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { Bookmark, CalendarDays, Search, ThumbsUp } from "lucide-vue-next";
+import { Eye, Search } from "lucide-vue-next";
 import { ElMessage } from "element-plus";
 import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
@@ -302,14 +568,22 @@ import BaseAvatar from "@/components/common/BaseAvatar.vue";
 
 type DocsTab = "综合" | "文章" | "图片" | "用户";
 
-const PAGE_SIZE = 5;
+const DEFAULT_PAGE_SIZE = 12;
+const PICTURE_PAGE_SIZE = 15;
+const MAX_VISIBLE_PAGES = 7;
+const loadingPlaceholders = Array.from({ length: DEFAULT_PAGE_SIZE }, (_, index) => index);
 const tabOptions: DocsTab[] = ["综合", "文章", "图片", "用户"];
+
+const ALL_TAB = tabOptions[0];
+const ARTICLE_TAB = tabOptions[1];
+const PICTURE_TAB = tabOptions[2];
+const USER_TAB = tabOptions[3];
 
 const router = useRouter();
 const route = useRoute();
 
 const initialKeyword = typeof route.query.q === "string" ? route.query.q : "";
-const initialTab = isDocsTab(route.query.tab) ? route.query.tab : "综合";
+const initialTab = isDocsTab(route.query.tab) ? route.query.tab : ALL_TAB;
 
 const searchInput = ref(initialKeyword);
 const keyword = ref(initialKeyword);
@@ -319,14 +593,62 @@ const errorMessage = ref("");
 const articleResults = ref<SearchArticleItem[]>([]);
 const pictureResults = ref<SearchPictureItem[]>([]);
 const userResults = ref<SearchUserItem[]>([]);
+const articleTotal = ref(0);
+const pictureTotal = ref(0);
+const currentArticlePage = ref(1);
+const currentPicturePage = ref(1);
+const picturePreviewVisible = ref(false);
+const activePicture = ref<SearchPictureItem | null>(null);
 
 let latestRequestId = 0;
 
-const totalCount = computed(() => articleResults.value.length + pictureResults.value.length + userResults.value.length);
+const totalCount = computed(() => {
+  if (activeTab.value === ARTICLE_TAB) {
+    return articleTotal.value;
+  }
+
+  if (activeTab.value === PICTURE_TAB) {
+    return pictureTotal.value;
+  }
+
+  return articleResults.value.length + pictureResults.value.length + userResults.value.length;
+});
 const hasAnyResults = computed(() => totalCount.value > 0);
+const currentSearchPage = computed(() => (activeTab.value === PICTURE_TAB ? currentPicturePage.value : currentArticlePage.value));
+const currentSearchTotal = computed(() => (activeTab.value === PICTURE_TAB ? pictureTotal.value : articleTotal.value));
+const currentPageSize = computed(() => (activeTab.value === PICTURE_TAB ? PICTURE_PAGE_SIZE : DEFAULT_PAGE_SIZE));
+const pageTotal = computed(() => {
+  if (activeTab.value !== ARTICLE_TAB && activeTab.value !== PICTURE_TAB) {
+    return 0;
+  }
+
+  return Math.ceil(currentSearchTotal.value / currentPageSize.value);
+});
+const showPagination = computed(() => pageTotal.value > 1);
+const visiblePageNumbers = computed(() => {
+  const totalPages = pageTotal.value;
+  if (totalPages <= 0) {
+    return [];
+  }
+
+  if (totalPages <= MAX_VISIBLE_PAGES) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  const half = Math.floor(MAX_VISIBLE_PAGES / 2);
+  let start = Math.max(1, currentSearchPage.value - half);
+  let end = start + MAX_VISIBLE_PAGES - 1;
+
+  if (end > totalPages) {
+    end = totalPages;
+    start = end - MAX_VISIBLE_PAGES + 1;
+  }
+
+  return Array.from({ length: end - start + 1 }, (_, index) => start + index);
+});
 const resultLabel = computed(() => {
   const keywordText = keyword.value.trim();
-  const tabText = activeTab.value === "综合" ? "综合" : activeTab.value;
+  const tabText = activeTab.value === ALL_TAB ? ALL_TAB : activeTab.value;
   return keywordText
     ? `当前分类：${tabText}，关键词：“${keywordText}”`
     : `当前分类：${tabText}，未填写搜索词，展示全部数据`;
@@ -351,7 +673,13 @@ function changeTab(tab: DocsTab) {
 
 function executeSearch() {
   keyword.value = searchInput.value.trim();
+  currentArticlePage.value = 1;
+  currentPicturePage.value = 1;
   void loadResults();
+}
+
+function getPageSize(searchType: SearchTabType) {
+  return searchType === "picture" ? PICTURE_PAGE_SIZE : DEFAULT_PAGE_SIZE;
 }
 
 async function loadResults() {
@@ -362,19 +690,26 @@ async function loadResults() {
   try {
     const searchType = getSearchType(activeTab.value);
     const searchText = keyword.value.trim();
+    const pageSize = getPageSize(searchType);
 
     const nextArticles: SearchArticleItem[] = [];
     const nextPictures: SearchPictureItem[] = [];
     const nextUsers: SearchUserItem[] = [];
 
-    let pageNum = 1;
+    const pageNum =
+      searchType === "post"
+        ? currentArticlePage.value
+        : searchType === "picture"
+          ? currentPicturePage.value
+          : 1;
+    let loopPageNum = pageNum;
 
     while (true) {
       const result = await searchAll({
         searchText,
         type: searchType,
-        pageNum,
-        pageSize: PAGE_SIZE,
+        pageNum: loopPageNum,
+        pageSize,
       });
 
       if (requestId !== latestRequestId) {
@@ -390,39 +725,51 @@ async function loadResults() {
         nextPictures.push(...pictureChunk);
         nextUsers.push(...userChunk);
 
-        if (postChunk.length < PAGE_SIZE && pictureChunk.length < PAGE_SIZE && userChunk.length < PAGE_SIZE) {
+        if (postChunk.length < pageSize && pictureChunk.length < pageSize && userChunk.length < pageSize) {
           break;
         }
       } else if (searchType === "post") {
-        const chunk = (result.dataList ?? []) as SearchArticleItem[];
-        nextArticles.push(...chunk);
-        if (chunk.length < PAGE_SIZE) {
-          break;
-        }
+        articleResults.value = (result.dataList ?? []) as SearchArticleItem[];
+        pictureResults.value = [];
+        userResults.value = [];
+        articleTotal.value = result.total ?? 0;
+        pictureTotal.value = 0;
+        break;
       } else if (searchType === "picture") {
-        const chunk = (result.dataList ?? []) as SearchPictureItem[];
-        nextPictures.push(...chunk);
-        if (chunk.length < PAGE_SIZE) {
-          break;
-        }
+        articleResults.value = [];
+        pictureResults.value = (result.dataList ?? []) as SearchPictureItem[];
+        userResults.value = [];
+        articleTotal.value = 0;
+        pictureTotal.value = result.total ?? 0;
+        break;
       } else {
         const chunk = (result.dataList ?? []) as SearchUserItem[];
         nextUsers.push(...chunk);
-        if (chunk.length < PAGE_SIZE) {
+        if (chunk.length < pageSize) {
           break;
         }
       }
 
-      pageNum += 1;
+      loopPageNum += 1;
     }
 
     if (requestId !== latestRequestId) {
       return;
     }
 
-    articleResults.value = nextArticles;
-    pictureResults.value = nextPictures;
-    userResults.value = nextUsers;
+    if (searchType === "") {
+      articleResults.value = nextArticles;
+      pictureResults.value = nextPictures;
+      userResults.value = nextUsers;
+      articleTotal.value = nextArticles.length;
+      pictureTotal.value = nextPictures.length;
+    } else if (searchType === "user") {
+      articleResults.value = [];
+      pictureResults.value = [];
+      userResults.value = nextUsers;
+      articleTotal.value = 0;
+      pictureTotal.value = 0;
+    }
     await router.replace({
       query: {
         ...route.query,
@@ -430,7 +777,7 @@ async function loadResults() {
         q: keyword.value.trim() || undefined,
       },
     });
-  } catch (error) {
+  } catch {
     if (requestId !== latestRequestId) {
       return;
     }
@@ -438,6 +785,8 @@ async function loadResults() {
     articleResults.value = [];
     pictureResults.value = [];
     userResults.value = [];
+    articleTotal.value = 0;
+    pictureTotal.value = 0;
     errorMessage.value = "搜索接口调用失败，请稍后重试。";
     ElMessage.error(errorMessage.value);
   } finally {
@@ -447,28 +796,110 @@ async function loadResults() {
   }
 }
 
+function goToPage(page: number) {
+  if (!showPagination.value || loading.value || page < 1 || page > pageTotal.value || page === currentSearchPage.value) {
+    return;
+  }
+
+  if (activeTab.value === ARTICLE_TAB) {
+    currentArticlePage.value = page;
+  } else if (activeTab.value === PICTURE_TAB) {
+    currentPicturePage.value = page;
+  } else {
+    return;
+  }
+
+  void loadResults();
+}
+
 function getSearchType(tab: DocsTab): SearchTabType {
-  if (tab === "文章") {
+  if (tab === ARTICLE_TAB) {
     return "post";
   }
 
-  if (tab === "图片") {
+  if (tab === PICTURE_TAB) {
     return "picture";
   }
 
-  if (tab === "用户") {
+  if (tab === USER_TAB) {
     return "user";
   }
 
   return "";
 }
 
-function openArticle(articleId?: number) {
-  if (!articleId) {
+function getArticleTags(article: SearchArticleItem) {
+  return article.tagList?.filter(Boolean) ?? [];
+}
+
+function getArticleDisplayType(article: SearchArticleItem) {
+  const tag = getArticleTags(article)[0];
+  const mapping: Record<string, string> = {
+    后端: "Backend",
+    前端: "Frontend",
+    Java: "Article",
+    AI: "Article",
+    架构: "Architecture",
+    源码: "Source",
+  };
+  return `- ${mapping[tag ?? ""] ?? "Article"} -`;
+}
+
+function getArticleCover(article: SearchArticleItem, index: number) {
+  if (article.cover) {
+    return article.cover;
+  }
+
+  const title = article.title ?? "Article";
+  const palette = [
+    ["#101827", "#7c3aed", "#22d3ee"],
+    ["#201515", "#f97316", "#fb7185"],
+    ["#0f172a", "#38bdf8", "#a78bfa"],
+    ["#111827", "#f59e0b", "#f472b6"],
+  ][index % 4];
+
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 780">
+      <defs>
+        <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="${palette[0]}" />
+          <stop offset="55%" stop-color="${palette[1]}" />
+          <stop offset="100%" stop-color="${palette[2]}" />
+        </linearGradient>
+      </defs>
+      <rect width="1200" height="780" rx="40" fill="url(#bg)" />
+      <circle cx="1030" cy="160" r="160" fill="rgba(255,255,255,0.10)" />
+      <circle cx="240" cy="620" r="220" fill="rgba(255,255,255,0.08)" />
+      <path d="M70 520 C 260 410, 410 330, 640 430 S 980 590, 1150 430" stroke="rgba(255,255,255,0.72)" stroke-width="18" fill="none" stroke-linecap="round"/>
+      <text x="78" y="110" fill="rgba(255,255,255,0.96)" font-size="40" font-family="Inter, Arial, sans-serif">${getArticleDisplayType(article).replace(/&/g, "&amp;")}</text>
+      <text x="78" y="660" fill="rgba(255,255,255,0.16)" font-size="150" font-weight="700" font-family="Inter, Arial, sans-serif">${title.slice(0, 10).replace(/&/g, "&amp;")}</text>
+    </svg>
+  `;
+
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
+function openArticle(article: SearchArticleItem) {
+  if (!article.id) {
     return;
   }
 
-  void router.push(`/article/${articleId}`);
+  void router.push({
+    name: "article",
+    params: {
+      id: article.id,
+      slug: article.urlSlug || undefined,
+    },
+  });
+}
+
+function openPicturePreview(picture: SearchPictureItem) {
+  if (!picture.url) {
+    return;
+  }
+
+  activePicture.value = picture;
+  picturePreviewVisible.value = true;
 }
 
 function openAuthor(authorName?: string) {
@@ -487,42 +918,10 @@ function getUserInitials(userName?: string) {
   return value.slice(0, 2);
 }
 
-function getArticleExcerpt(content?: string) {
-  const plainText = (content ?? "")
-    .replace(/!\[[^\]]*]\([^)]*\)/g, " ")
-    .replace(/\[[^\]]*]\([^)]*\)/g, " ")
-    .replace(/[#>*`_-]/g, " ")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  if (!plainText) {
-    return "暂无摘要";
-  }
-
-  return plainText.length > 140 ? `${plainText.slice(0, 140)}...` : plainText;
-}
-
-function formatDate(value?: string) {
+function formatCount(value?: number | null) {
   if (!value) {
-    return "未知时间";
+    return "0";
   }
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "未知时间";
-  }
-
-  return date.toLocaleString("zh-CN", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function formatCount(value: number) {
   if (value >= 10000) {
     return `${(value / 10000).toFixed(value >= 100000 ? 0 : 1)}w`;
   }
@@ -701,149 +1100,211 @@ function formatCount(value: number) {
   font-weight: 600;
 }
 
-.docs-result-list {
+.article-loading {
   display: grid;
-  gap: 18px;
+  gap: 24px;
 }
 
-.docs-card {
-  padding: 22px 24px;
-  border-radius: 22px;
-  background: #ffffff;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
-}
-
-.docs-card:hover {
-  transform: translateY(-2px);
-  border-color: rgba(244, 131, 10, 0.14);
-  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.05);
-}
-
-.docs-card__top {
+.article-loading__header {
   display: flex;
+  flex-direction: column;
   align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
+  gap: 8px;
 }
 
-.docs-card__author {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  min-width: 0;
-}
-
-.docs-avatar,
-.docs-user-card__avatar {
+.article-loading__eyebrow {
   display: inline-flex;
-  width: 48px;
-  height: 48px;
   align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
+  min-height: 30px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 999px;
+  padding: 0 14px;
+  color: #7c6f64;
+  font-family: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
 }
 
-.docs-user-card__avatar {
-  width: 64px;
-  height: 64px;
+.article-loading__title {
+  margin: 0;
+  color: #4b5563;
+  font-family: "Noto Serif SC", "Songti SC", "STSong", serif;
+  font-size: 20px;
+  line-height: 1.5;
 }
 
-.docs-avatar__image,
-.docs-user-card__avatar-image {
+.article-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 34px 30px;
+}
+
+.article-grid--loading {
+  gap: 30px;
+}
+
+.article-card {
+  min-width: 0;
+  cursor: pointer;
+}
+
+.article-card--skeleton {
+  cursor: default;
+}
+
+.article-card__image-wrap {
+  overflow: hidden;
+  border: 1px solid rgba(17, 24, 39, 0.08);
+  border-radius: 16px;
+  background: #f8fafc;
+  aspect-ratio: 1.48 / 1;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.4);
+}
+
+.article-card__image-wrap--skeleton {
+  border-color: rgba(148, 163, 184, 0.12);
+  box-shadow: none;
+}
+
+.article-card__image {
   width: 100%;
   height: 100%;
-  border-radius: 999px;
   object-fit: cover;
+  transition: transform 0.38s ease, filter 0.38s ease;
 }
 
-.docs-card__author-body {
-  min-width: 0;
+.article-card:hover .article-card__image {
+  transform: scale(1.06);
+  filter: saturate(1.08);
 }
 
-.docs-card__author-name {
+.article-card__title {
+  margin: 14px 0 8px;
   color: #111827;
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 700;
-  cursor: pointer;
+  line-height: 1.45;
 }
 
-.docs-card__author-name:hover {
-  color: #d97706;
-}
-
-.docs-card__author-meta {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin: 6px 0 0;
-  color: #9ca3af;
-  font-size: 12px;
-}
-
-.docs-card__type {
-  display: inline-flex;
-  align-items: center;
-  min-height: 28px;
-  border-radius: 999px;
-  padding: 0 12px;
-  background: #f3f4f6;
-  color: #4b5563;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.docs-card__title {
-  margin: 18px 0 10px;
-  color: #111827;
-  font-size: 24px;
-  font-weight: 700;
-  line-height: 1.4;
-  text-align: left;
-}
-
-.docs-card__title--button {
-  cursor: pointer;
-}
-
-.docs-card__title--button:hover {
-  color: #d97706;
-}
-
-.docs-card__excerpt {
+.article-card__summary {
   margin: 0;
+  display: -webkit-box;
   color: #6b7280;
-  font-size: 15px;
-  line-height: 1.85;
+  font-size: 13px;
+  line-height: 1.7;
+  overflow: hidden;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  min-height: calc(1.7em * 3);
+  max-height: calc(1.7em * 3);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
 }
 
-.docs-card__tags {
+.article-card__meta {
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 18px;
-}
-
-.docs-card__tag {
-  border: 1px solid #e5e7eb;
-  border-radius: 999px;
-  padding: 6px 12px;
-  color: #4b5563;
-  font-size: 12px;
-}
-
-.docs-card__meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 18px;
-  margin-top: 18px;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
   color: #6b7280;
   font-size: 13px;
 }
 
-.docs-card__meta span {
+.article-card__author {
+  min-width: 0;
+}
+
+.article-card__meta-right {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.article-card__tags {
+  display: flex;
+  max-width: 140px;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 14px;
+  text-align: right;
+}
+
+.article-card__tag {
+  color: #7c6f64;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.article-card__views {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  flex-shrink: 0;
+}
+
+.article-card__title-skeleton,
+.article-card__summary-skeleton {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.article-skeleton {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(226, 232, 240, 0.72) 0%, rgba(241, 245, 249, 0.98) 50%, rgba(226, 232, 240, 0.72) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.35s ease-in-out infinite;
+}
+
+.article-skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.46) 50%, transparent 100%);
+  transform: translateX(-100%);
+  animation: sweep 1.35s ease-in-out infinite;
+}
+
+.article-skeleton--image {
+  width: 100%;
+  height: 100%;
+  border-radius: 16px;
+}
+
+.article-skeleton--title {
+  height: 18px;
+}
+
+.article-skeleton--title-wide {
+  width: 88%;
+}
+
+.article-skeleton--title-narrow {
+  width: 62%;
+}
+
+.article-skeleton--summary {
+  height: 14px;
+  width: 100%;
+}
+
+.article-skeleton--summary-short {
+  width: 74%;
+}
+
+.article-skeleton--meta {
+  width: 92px;
+  height: 14px;
+}
+
+.article-skeleton--meta-short {
+  width: 68px;
 }
 
 .docs-picture-grid {
@@ -856,6 +1317,13 @@ function formatCount(value: number) {
   overflow: hidden;
   border-radius: 20px;
   background: #ffffff;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.docs-picture-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.05);
 }
 
 .docs-picture-card__image,
@@ -864,6 +1332,15 @@ function formatCount(value: number) {
   width: 100%;
   aspect-ratio: 1 / 1;
   object-fit: cover;
+}
+
+.docs-picture-card__image {
+  transition: transform 0.38s ease, filter 0.38s ease;
+}
+
+.docs-picture-card:hover .docs-picture-card__image {
+  transform: scale(1.06);
+  filter: saturate(1.08);
 }
 
 .docs-picture-card__placeholder {
@@ -877,10 +1354,63 @@ function formatCount(value: number) {
 
 .docs-picture-card__title {
   margin: 0;
-  padding: 12px 14px 16px;
+  padding: 12px 14px 0;
   color: #111827;
   font-size: 14px;
   line-height: 1.6;
+}
+
+.docs-picture-card__description {
+  margin: 0;
+  padding: 8px 14px 16px;
+  color: #6b7280;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.picture-preview {
+  display: grid;
+  gap: 16px;
+}
+
+.picture-preview__media {
+  display: flex;
+  max-height: min(76vh, 920px);
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 20px;
+  background: #f8fafc;
+}
+
+.picture-preview__image {
+  display: block;
+  max-width: 100%;
+  max-height: min(76vh, 920px);
+  object-fit: contain;
+}
+
+.picture-preview__empty {
+  display: flex;
+  min-height: 320px;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  color: #9ca3af;
+  font-size: 14px;
+}
+
+.picture-preview__description {
+  margin: 0;
+  color: #4b5563;
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.picture-preview-dialog__title {
+  color: #111827;
+  font-size: 18px;
+  font-weight: 700;
 }
 
 .docs-user-grid {
@@ -904,6 +1434,22 @@ function formatCount(value: number) {
 .docs-user-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 16px 34px rgba(15, 23, 42, 0.05);
+}
+
+.docs-user-card__avatar {
+  display: inline-flex;
+  width: 64px;
+  height: 64px;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.docs-user-card__avatar-image {
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  object-fit: cover;
 }
 
 .docs-user-card__name {
@@ -933,6 +1479,95 @@ function formatCount(value: number) {
   font-size: 14px;
 }
 
+.pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 42px;
+}
+
+.docs-results .pagination {
+  display: none;
+}
+
+.docs-search-panel > .docs-pagination {
+  display: none !important;
+}
+
+.docs-results > .docs-pagination {
+  display: flex;
+}
+
+.docs-page :deep(.picture-preview-dialog) {
+  max-width: calc(100vw - 32px);
+  border-radius: 18px;
+}
+
+.docs-page :deep(.picture-preview-dialog .el-dialog__header) {
+  margin-right: 0;
+  border-bottom: 1px solid #f1f5f9;
+  padding: 20px 24px 18px;
+}
+
+.docs-page :deep(.picture-preview-dialog .el-dialog__body) {
+  padding: 20px 24px 24px;
+}
+
+.docs-page :deep(.picture-preview-dialog .el-dialog__headerbtn) {
+  top: 18px;
+  right: 18px;
+}
+
+.pagination__item {
+  min-width: 44px;
+  min-height: 44px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 0 14px;
+  background: transparent;
+  color: #4b5563;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+.pagination__item:hover:not(:disabled) {
+  transform: translateY(-1px);
+  color: #111827;
+}
+
+.pagination__item.active {
+  background: #5d6776;
+  color: #ffffff;
+}
+
+.pagination__item:disabled {
+  color: #c0c4cc;
+  cursor: not-allowed;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+
+  100% {
+    transform: translateX(100%);
+  }
+}
+
 @media (max-width: 1024px) {
   .docs-search-panel {
     padding: 22px 22px 24px;
@@ -941,6 +1576,10 @@ function formatCount(value: number) {
   .docs-results__head {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .article-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .docs-picture-grid {
@@ -976,16 +1615,23 @@ function formatCount(value: number) {
     font-size: 24px;
   }
 
-  .docs-card {
-    padding: 18px 18px 20px;
+  .article-loading {
+    gap: 20px;
   }
 
-  .docs-card__top {
-    flex-direction: column;
+  .article-loading__title {
+    font-size: 18px;
   }
 
-  .docs-card__title {
-    font-size: 20px;
+  .pagination {
+    gap: 8px;
+  }
+
+  .pagination__item {
+    min-width: 40px;
+    min-height: 40px;
+    font-size: 14px;
+    padding: 0 12px;
   }
 
   .docs-picture-grid {
@@ -994,6 +1640,17 @@ function formatCount(value: number) {
 
   .docs-user-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .article-grid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+
+  .article-loading__title {
+    font-size: 17px;
   }
 }
 </style>

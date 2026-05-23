@@ -14,9 +14,14 @@ export interface SearchUserItem {
 export interface SearchArticleItem {
   id?: number;
   title?: string;
+  shortTitle?: string;
+  summary?: string;
+  cover?: string;
+  urlSlug?: string;
   content?: string;
   thumbNum?: number;
   favourNum?: number;
+  readNum?: number;
   userId?: number;
   createTime?: string;
   updateTime?: string;
@@ -29,6 +34,7 @@ export interface SearchArticleItem {
 export interface SearchPictureItem {
   title?: string;
   url?: string;
+  description?: string;
 }
 
 export interface SearchResult {
@@ -36,6 +42,7 @@ export interface SearchResult {
   postList?: SearchArticleItem[];
   pictureList?: SearchPictureItem[];
   dataList?: unknown[];
+  total?: number;
 }
 
 interface SearchResponse<T> {
