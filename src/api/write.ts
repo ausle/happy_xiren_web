@@ -1,14 +1,7 @@
 import axios from "axios";
 import http from "@/api/http";
+import { type ApiResponse, extractApiErrorMessage, unwrapApiResponse } from "@/api/response";
 import type { HomeCategory, HomeTag } from "@/types/home";
-
-type ApiResponse<T> = {
-  status: {
-    code: number;
-    msg: string;
-  };
-  result: T;
-};
 
 type PageResponse<T> = {
   list: T[];
@@ -42,34 +35,14 @@ export interface PublishArticleResult {
 
 const ARTICLE_EDIT_PATH = "/article/edit";
 
-const unwrapResponse = <T>(data: ApiResponse<T>) => {
-  if (data.status.code !== 0) {
-    throw new Error(data.status.msg || "请求失败");
-  }
-
-  return data.result;
-};
-
-export const extractApiErrorMessage = (value: unknown) => {
-  if (axios.isAxiosError(value)) {
-    const responseMessage = value.response?.data?.status?.msg;
-    if (responseMessage) return responseMessage;
-    if (value.message) return value.message;
-  }
-
-  if (value instanceof Error && value.message) {
-    return value.message;
-  }
-
-  return "请求失败，请稍后重试";
-};
+export { extractApiErrorMessage };
 
 export async function fetchWriteCategories() {
   const { data } = await http.get<ApiResponse<HomeCategory[]>>("/article/api/category/list", {
     params: { ignoreNoArticles: true },
   });
 
-  return unwrapResponse(data).filter((item) => item.categoryId > 0);
+  return unwrapApiResponse(data).filter((item) => item.categoryId > 0);
 }
 
 export async function searchWriteTags(keyword = "") {
@@ -81,7 +54,7 @@ export async function searchWriteTags(keyword = "") {
     },
   });
 
-  return unwrapResponse(data).list ?? [];
+  return unwrapApiResponse(data).list ?? [];
 }
 
 export async function generateArticleSummary(content: string) {
@@ -89,7 +62,7 @@ export async function generateArticleSummary(content: string) {
     content,
   });
 
-  return unwrapResponse(data);
+  return unwrapApiResponse(data);
 }
 
 export async function uploadArticleCover(file: File) {
@@ -102,7 +75,7 @@ export async function uploadArticleCover(file: File) {
     },
   });
 
-  const result = unwrapResponse(data);
+  const result = unwrapApiResponse(data);
   if (!result.imagePath) {
     throw new Error("封面上传失败");
   }
@@ -117,7 +90,7 @@ export async function saveRemoteArticleImage(imgUrl: string) {
     },
   });
 
-  const result = unwrapResponse(data);
+  const result = unwrapApiResponse(data);
   if (!result.imagePath) {
     throw new Error("图片转存失败");
   }
@@ -140,7 +113,7 @@ export async function submitArticle(payload: PublishArticlePayload) {
     readType: payload.readType,
   });
 
-  return unwrapResponse(data);
+  return unwrapApiResponse(data);
 }
 
 export async function ensureArticleEditorReady(origin: string) {

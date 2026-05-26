@@ -138,18 +138,16 @@
 </template>
 
 <script setup lang="ts">
-import axios from "axios";
 import { CheckCircle2, Eye, EyeOff } from "lucide-vue-next";
 import { onBeforeUnmount, reactive, ref } from "vue";
 import { RouterLink, useRouter } from "vue-router";
 import http from "@/api/http";
+import { extractApiErrorMessage, unwrapApiResponse } from "@/api/response";
 
 type ApiResponse<T> = {
-  status: {
-    code: number;
-    msg: string;
-  };
-  result: T;
+  code: number;
+  data: T;
+  message: string;
 };
 
 const router = useRouter();
@@ -232,24 +230,11 @@ const toFormData = (payload: Record<string, string>) => {
 
 const postForm = async <T>(url: string, payload: Record<string, string>) => {
   const { data } = await http.post<ApiResponse<T>>(url, toFormData(payload));
-  if (data.status.code !== 0) {
-    throw new Error(data.status.msg || "请求失败");
-  }
-  return data.result;
+  return unwrapApiResponse(data);
 };
 
 const extractErrorMessage = (error: unknown) => {
-  if (axios.isAxiosError(error)) {
-    const responseMessage = error.response?.data?.status?.msg;
-    if (responseMessage) return responseMessage;
-    if (error.message) return error.message;
-  }
-
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-
-  return "请求失败，请稍后重试";
+  return extractApiErrorMessage(error);
 };
 
 const startCountdown = (seconds: number) => {

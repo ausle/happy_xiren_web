@@ -17,7 +17,7 @@
 
         <div class="docs-tabs" role="tablist" aria-label="文档搜索分类">
           <button
-            v-for="tab in tabOptions"
+            v-for="tab in visibleTabOptions"
             :key="tab"
             class="docs-tabs__item"
             :class="{ active: activeTab === tab }"
@@ -26,6 +26,51 @@
           >
             {{ tab }}
           </button>
+        </div>
+        <div v-if="false && showArticleTagFilter" class="docs-tag-filter">
+          <span class="docs-tag-filter__label">标签筛选（最多 3 个）</span>
+          <div class="docs-tag-filter__list">
+            <button
+              class="docs-tag-filter__item"
+              :class="{ active: !selectedArticleTags.length }"
+              type="button"
+              @click="clearArticleTags()"
+            >
+              全部
+            </button>
+            <button
+              v-for="tag in availableArticleTags"
+              :key="tag"
+              class="docs-tag-filter__item"
+              :class="{ active: selectedArticleTags.includes(tag) }"
+              type="button"
+              @click="toggleArticleTag(tag)"
+            >
+              {{ tag }}
+            </button>
+          </div>
+        </div>
+        <div v-if="showArticleTagFilter" class="docs-tag-filter">
+          <span class="docs-tag-filter__label">标签筛选</span>
+          <ElSelect
+            v-model="selectedArticleTags"
+            class="docs-tag-filter__select"
+            collapse-tags
+            collapse-tags-tooltip
+            filterable
+            multiple
+            :multiple-limit="3"
+            placeholder="请选择你需要的标签，最多3个"
+            popper-class="docs-tag-select-popper"
+            remote
+            reserve-keyword
+            :loading="loadingArticleTags"
+            @change="handleArticleTagChange"
+            @visible-change="handleArticleTagSelectVisible"
+            :remote-method="handleArticleTagSearch"
+          >
+            <ElOption v-for="tag in availableArticleTags" :key="tag" :label="tag" :value="tag" />
+          </ElSelect>
         </div>
         <nav v-if="showPagination" class="docs-pagination pagination" aria-label="Search pagination">
           <button class="pagination__item" :disabled="currentSearchPage <= 1" type="button" @click="goToPage(1)">
@@ -84,7 +129,7 @@
           <div>
             <p class="docs-results__eyebrow">SEARCH</p>
             <h1 class="docs-results__title">文档搜索</h1>
-            <p class="docs-results__subtitle">{{ resultLabel }}</p>
+            <p class="docs-results__subtitle">{{ docsSearchSummaryText }}</p>
           </div>
           <div class="docs-results__summary">
             <span class="docs-results__count">{{ totalCount }}</span>
@@ -160,9 +205,9 @@
                   <div class="article-card__meta">
                     <span class="article-card__author">{{ article.user?.userName || "匿名作者" }}</span>
                     <div class="article-card__meta-right">
-                      <div v-if="getArticleTags(article).length" class="article-card__tags">
+                      <div v-if="getVisibleArticleTags(article).length" class="article-card__tags">
                         <span
-                          v-for="tag in getArticleTags(article)"
+                          v-for="tag in getVisibleArticleTags(article)"
                           :key="`${article.id}-${tag}`"
                           class="article-card__tag"
                         >
@@ -261,9 +306,9 @@
               <div class="article-card__meta">
                 <span class="article-card__author">{{ article.user?.userName || "匿名作者" }}</span>
                 <div class="article-card__meta-right">
-                  <div v-if="getArticleTags(article).length" class="article-card__tags">
+                  <div v-if="getVisibleArticleTags(article).length" class="article-card__tags">
                     <span
-                      v-for="tag in getArticleTags(article)"
+                      v-for="tag in getVisibleArticleTags(article)"
                       :key="`${article.id}-${tag}`"
                       class="article-card__tag"
                     >
@@ -561,9 +606,9 @@
 <script setup lang="ts">
 import { Eye, Search } from "lucide-vue-next";
 import { ElMessage } from "element-plus";
-import { computed, onMounted, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { searchAll, type SearchArticleItem, type SearchPictureItem, type SearchTabType, type SearchUserItem } from "@/api/search";
+import { fetchSearchTagsPage, searchAll, type SearchArticleItem, type SearchPictureItem, type SearchTabType, type SearchUserItem } from "@/api/search";
 import BaseAvatar from "@/components/common/BaseAvatar.vue";
 
 type DocsTab = "综合" | "文章" | "图片" | "用户";
@@ -575,6 +620,7 @@ const loadingPlaceholders = Array.from({ length: DEFAULT_PAGE_SIZE }, (_, index)
 const tabOptions: DocsTab[] = ["综合", "文章", "图片", "用户"];
 
 const ALL_TAB = tabOptions[0];
+const visibleTabOptions = tabOptions.filter((tab) => tab !== ALL_TAB);
 const ARTICLE_TAB = tabOptions[1];
 const PICTURE_TAB = tabOptions[2];
 const USER_TAB = tabOptions[3];
@@ -583,11 +629,26 @@ const router = useRouter();
 const route = useRoute();
 
 const initialKeyword = typeof route.query.q === "string" ? route.query.q : "";
-const initialTab = isDocsTab(route.query.tab) ? route.query.tab : ALL_TAB;
+const initialTab = isDocsTab(route.query.tab) && route.query.tab !== ALL_TAB ? route.query.tab : ARTICLE_TAB;
+const initialTagQuery =
+  typeof route.query.tags === "string"
+    ? route.query.tags
+    : typeof route.query.tag === "string"
+      ? route.query.tag
+      : "";
+const initialTags = initialTagQuery
+  ? initialTagQuery
+      .split(",")
+      .map((tag) => tag.trim())
+      .filter(Boolean)
+      .slice(0, 3)
+  : [];
 
 const searchInput = ref(initialKeyword);
 const keyword = ref(initialKeyword);
 const activeTab = ref<DocsTab>(initialTab);
+const selectedArticleTags = ref<string[]>(initialTags);
+const selectedArticleTag = computed(() => selectedArticleTags.value[0] ?? "");
 const loading = ref(false);
 const errorMessage = ref("");
 const articleResults = ref<SearchArticleItem[]>([]);
@@ -599,9 +660,40 @@ const currentArticlePage = ref(1);
 const currentPicturePage = ref(1);
 const picturePreviewVisible = ref(false);
 const activePicture = ref<SearchPictureItem | null>(null);
+const articleTagCatalog = ref<string[]>([]);
+const loadingArticleTags = ref(false);
+const articleTagKeyword = ref("");
+const articleTagPageNumber = ref(0);
+const articleTagPageTotal = ref(0);
+
+let articleTagDropdownWrap: HTMLElement | null = null;
 
 let latestRequestId = 0;
 
+const showArticleTagFilter = computed(() => activeTab.value === ARTICLE_TAB);
+const availableArticleTags = computed(() => {
+  const tags = new Set<string>();
+
+  articleTagCatalog.value.forEach((tag) => {
+    const value = tag.trim();
+    if (value) {
+      tags.add(value);
+    }
+  });
+
+  articleResults.value.forEach((article) => {
+    getArticleTags(article).forEach((tag) => {
+      const value = tag.trim();
+      if (value) {
+        tags.add(value);
+      }
+    });
+  });
+
+  selectedArticleTags.value.forEach((tag) => tags.add(tag));
+
+  return Array.from(tags);
+});
 const totalCount = computed(() => {
   if (activeTab.value === ARTICLE_TAB) {
     return articleTotal.value;
@@ -658,6 +750,35 @@ onMounted(() => {
   void loadResults();
 });
 
+onBeforeUnmount(() => {
+  unbindArticleTagScroll();
+});
+
+const docsSearchSummaryText = computed(() => {
+  void searchSummaryText.value;
+  const keywordText = keyword.value.trim();
+  const tabText = activeTab.value === ALL_TAB ? ALL_TAB : activeTab.value;
+  const tagText =
+    activeTab.value === ARTICLE_TAB && selectedArticleTags.value.length
+      ? `，标签：“${selectedArticleTags.value.join("、")}”`
+      : "";
+
+  return keywordText
+    ? `当前分类：${tabText}，关键词：“${keywordText}”${tagText}`
+    : `当前分类：${tabText}，未填写搜索词，展示全部数据${tagText}`;
+});
+
+const searchSummaryText = computed(() => {
+  void resultLabel.value;
+  const keywordText = keyword.value.trim();
+  const tabText = activeTab.value === ALL_TAB ? ALL_TAB : activeTab.value;
+  const tagText = activeTab.value === ARTICLE_TAB && selectedArticleTag.value ? `，标签：“${selectedArticleTag.value}”` : "";
+
+  return keywordText
+    ? `当前分类：${tabText}，关键词：“${keywordText}”${tagText}`
+    : `当前分类：${tabText}，未填写搜索词，展示全部数据${tagText}`;
+});
+
 function isDocsTab(value: unknown): value is DocsTab {
   return typeof value === "string" && tabOptions.includes(value as DocsTab);
 }
@@ -675,6 +796,134 @@ function executeSearch() {
   keyword.value = searchInput.value.trim();
   currentArticlePage.value = 1;
   currentPicturePage.value = 1;
+  void loadResults();
+}
+
+async function loadArticleTagOptions() {
+  if (loadingArticleTags.value) {
+    return;
+  }
+
+  loadingArticleTags.value = true;
+
+  try {
+    const result = await fetchSearchTagsPage(articleTagKeyword.value, articleTagPageNumber.value + 1, 10);
+    const nextTags = (result.list ?? [])
+      .map((item) => item.tag?.trim() ?? "")
+      .filter(Boolean);
+    const merged = new Set<string>();
+
+    articleTagCatalog.value.forEach((tag) => merged.add(tag));
+    selectedArticleTags.value.forEach((tag) => merged.add(tag));
+    nextTags.forEach((tag) => merged.add(tag));
+
+    articleTagCatalog.value = Array.from(merged);
+    articleTagPageNumber.value = Number(result.pageNum ?? articleTagPageNumber.value + 1);
+    articleTagPageTotal.value = Number(result.pageTotal ?? 0);
+  } catch {
+    if (articleTagPageNumber.value === 0) {
+      articleTagCatalog.value = [...selectedArticleTags.value];
+    }
+  } finally {
+    loadingArticleTags.value = false;
+  }
+}
+
+function clearArticleTags() {
+  if (!selectedArticleTags.value.length) {
+    return;
+  }
+
+  selectedArticleTags.value = [];
+  currentArticlePage.value = 1;
+  void loadResults();
+}
+
+function toggleArticleTag(tag: string) {
+  const value = tag.trim();
+  if (!value) {
+    return;
+  }
+
+  if (selectedArticleTags.value.includes(value)) {
+    selectedArticleTags.value = selectedArticleTags.value.filter((item) => item !== value);
+    currentArticlePage.value = 1;
+    void loadResults();
+    return;
+  }
+
+  if (selectedArticleTags.value.length >= 3) {
+    ElMessage.warning("最多可选择 3 个标签");
+    return;
+  }
+
+  selectedArticleTags.value = [...selectedArticleTags.value, value];
+  currentArticlePage.value = 1;
+  void loadResults();
+}
+
+function unbindArticleTagScroll() {
+  if (!articleTagDropdownWrap) {
+    return;
+  }
+
+  articleTagDropdownWrap.removeEventListener("scroll", handleArticleTagDropdownScroll);
+  articleTagDropdownWrap = null;
+}
+
+async function bindArticleTagScroll() {
+  await nextTick();
+  unbindArticleTagScroll();
+
+  articleTagDropdownWrap = document.querySelector(".docs-tag-select-popper .el-select-dropdown__wrap");
+  articleTagDropdownWrap?.addEventListener("scroll", handleArticleTagDropdownScroll);
+}
+
+function handleArticleTagDropdownScroll() {
+  if (!articleTagDropdownWrap || loadingArticleTags.value) {
+    return;
+  }
+
+  const { scrollTop, clientHeight, scrollHeight } = articleTagDropdownWrap;
+  const reachedBottom = scrollTop + clientHeight >= scrollHeight - 24;
+  const hasMore = articleTagPageNumber.value < articleTagPageTotal.value;
+
+  if (reachedBottom && hasMore) {
+    void loadArticleTagOptions();
+  }
+}
+
+function handleArticleTagSearch(keywordText: string) {
+  articleTagKeyword.value = keywordText.trim();
+  articleTagPageNumber.value = 0;
+  articleTagPageTotal.value = 0;
+  articleTagCatalog.value = [...selectedArticleTags.value];
+  void loadArticleTagOptions();
+}
+
+function handleArticleTagSelectVisible(visible: boolean) {
+  if (!visible) {
+    unbindArticleTagScroll();
+    return;
+  }
+
+  articleTagKeyword.value = "";
+  articleTagPageNumber.value = 0;
+  articleTagPageTotal.value = 0;
+  articleTagCatalog.value = [...selectedArticleTags.value];
+  void loadArticleTagOptions();
+  void bindArticleTagScroll();
+}
+
+function handleArticleTagChange(value: string[]) {
+  if (value.length > 3) {
+    selectedArticleTags.value = value.slice(0, 3);
+    ElMessage.warning("最多可选择 3 个标签");
+    return;
+  }
+
+  selectedArticleTags.value = value;
+  currentArticlePage.value = 1;
   void loadResults();
 }
 
@@ -710,6 +959,7 @@ async function loadResults() {
         type: searchType,
         pageNum: loopPageNum,
         pageSize,
+        tags: searchType === "post" && selectedArticleTags.value.length ? selectedArticleTags.value : undefined,
       });
 
       if (requestId !== latestRequestId) {
@@ -775,6 +1025,8 @@ async function loadResults() {
         ...route.query,
         tab: activeTab.value,
         q: keyword.value.trim() || undefined,
+        tag: undefined,
+        tags: activeTab.value === ARTICLE_TAB && selectedArticleTags.value.length ? selectedArticleTags.value.join(",") : undefined,
       },
     });
   } catch {
@@ -830,6 +1082,10 @@ function getSearchType(tab: DocsTab): SearchTabType {
 
 function getArticleTags(article: SearchArticleItem) {
   return article.tagList?.filter(Boolean) ?? [];
+}
+
+function getVisibleArticleTags(article: SearchArticleItem) {
+  return getArticleTags(article).slice(0, 3);
 }
 
 function getArticleDisplayType(article: SearchArticleItem) {
@@ -1018,6 +1274,66 @@ function formatCount(value?: number | null) {
   border-radius: 999px;
   background: linear-gradient(90deg, #f4830a 0%, #ffb357 100%);
   content: "";
+}
+
+.docs-tag-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.docs-tag-filter__label {
+  color: #6b7280;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.docs-tag-filter__select {
+  width: min(100%, 440px);
+}
+
+.docs-tag-filter__list {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.docs-tag-filter__item {
+  min-height: 36px;
+  border: 1px solid #e5e7eb;
+  border-radius: 999px;
+  padding: 0 14px;
+  background: #ffffff;
+  color: #4b5563;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+.docs-tag-filter__item:hover {
+  transform: translateY(-1px);
+  border-color: rgba(244, 131, 10, 0.42);
+  color: #111827;
+}
+
+.docs-tag-filter__item.active {
+  border-color: transparent;
+  background: linear-gradient(90deg, #f4830a 0%, #ffb357 100%);
+  color: #ffffff;
+  box-shadow: 0 10px 22px rgba(244, 131, 10, 0.18);
+}
+
+.docs-page :deep(.docs-tag-filter__select .el-select__wrapper) {
+  min-height: 44px;
+  border-radius: 12px;
+}
+
+.docs-page :deep(.docs-tag-select-popper .el-select-dropdown__wrap) {
+  max-height: 240px;
 }
 
 .docs-results {
@@ -1225,14 +1541,16 @@ function formatCount(value?: number | null) {
 
 .article-card__tags {
   display: flex;
-  max-width: 140px;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 14px;
-  text-align: right;
+  max-width: 180px;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 .article-card__tag {
+  flex-shrink: 0;
   color: #7c6f64;
   font-size: 12px;
   line-height: 1.35;
@@ -1611,6 +1929,16 @@ function formatCount(value?: number | null) {
     font-size: 15px;
   }
 
+  .docs-tag-filter {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .docs-tag-filter__list {
+    width: 100%;
+  }
+
   .docs-results__title {
     font-size: 24px;
   }
@@ -1644,6 +1972,12 @@ function formatCount(value?: number | null) {
 }
 
 @media (max-width: 640px) {
+  .docs-tag-filter__item {
+    min-height: 34px;
+    padding: 0 12px;
+    font-size: 12px;
+  }
+
   .article-grid {
     grid-template-columns: 1fr;
     gap: 20px;

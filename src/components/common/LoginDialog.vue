@@ -46,20 +46,12 @@
 </template>
 
 <script setup lang="ts">
-import axios from "axios";
 import { Eye, EyeOff, X } from "lucide-vue-next";
 import { ref } from "vue";
 import { useRouter } from "vue-router";
 import http from "@/api/http";
+import { type ApiResponse, extractApiErrorMessage, unwrapApiResponse } from "@/api/response";
 import { useAuthStore } from "@/stores/auth";
-
-type ApiResponse<T> = {
-  status: {
-    code: number;
-    msg: string;
-  };
-  result: T;
-};
 
 const emit = defineEmits<{
   close: [];
@@ -84,24 +76,7 @@ const toFormData = (payload: Record<string, string>) => {
 
 const postForm = async <T>(url: string, payload: Record<string, string>) => {
   const { data } = await http.post<ApiResponse<T>>(url, toFormData(payload));
-  if (data.status.code !== 0) {
-    throw new Error(data.status.msg || "请求失败");
-  }
-  return data.result;
-};
-
-const extractErrorMessage = (value: unknown) => {
-  if (axios.isAxiosError(value)) {
-    const responseMessage = value.response?.data?.status?.msg;
-    if (responseMessage) return responseMessage;
-    if (value.message) return value.message;
-  }
-
-  if (value instanceof Error && value.message) {
-    return value.message;
-  }
-
-  return "登录失败，请稍后重试";
+  return unwrapApiResponse(data);
 };
 
 const handleLogin = async () => {
@@ -126,7 +101,7 @@ const handleLogin = async () => {
     await authStore.fetchLoginStatus();
     emit("close");
   } catch (value) {
-    error.value = extractErrorMessage(value);
+    error.value = extractApiErrorMessage(value, "登录失败，请稍后重试");
   } finally {
     loading.value = false;
   }

@@ -1,4 +1,14 @@
 import http from "@/api/http";
+import { type ApiResponse, unwrapApiResponse } from "@/api/response";
+import type { HomeTag } from "@/types/home";
+
+type PageResponse<T> = {
+  list: T[];
+  pageSize: number;
+  pageNum: number;
+  pageTotal: number;
+  total: number;
+};
 
 export type SearchTabType = "" | "post" | "picture" | "user";
 
@@ -45,18 +55,27 @@ export interface SearchResult {
   total?: number;
 }
 
-interface SearchResponse<T> {
-  result: T;
-}
-
 export interface SearchRequestPayload {
   searchText: string;
   type: SearchTabType;
   pageNum: number;
   pageSize: number;
+  tags?: string[];
+}
+
+export async function fetchSearchTagsPage(keyword = "", pageNumber = 1, pageSize = 10) {
+  const { data } = await http.get<ApiResponse<PageResponse<HomeTag>>>("/article/tag/list", {
+    params: {
+      key: keyword.trim() || undefined,
+      pageNumber,
+      pageSize,
+    },
+  });
+
+  return unwrapApiResponse(data);
 }
 
 export async function searchAll(payload: SearchRequestPayload) {
-  const { data } = await http.post<SearchResponse<SearchResult>>("/article/all", payload);
-  return data.result;
+  const { data } = await http.post<ApiResponse<SearchResult>>("/article/all", payload);
+  return unwrapApiResponse(data);
 }

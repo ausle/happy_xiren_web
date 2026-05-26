@@ -197,7 +197,6 @@ const errorMessage = ref("");
 const displayArticles = ref<HomeArticle[]>([]);
 const currentPage = ref(1);
 const pageSize = ref(DEFAULT_PAGE_SIZE);
-const pageTotal = ref(0);
 const total = ref(0);
 const skipNextCategoryWatch = ref(false);
 const loadingPlaceholders = Array.from({ length: DEFAULT_PAGE_SIZE }, (_, index) => index);
@@ -226,7 +225,14 @@ const articleCategories = computed(() => {
 });
 
 const currentCategoryLabel = computed(() => uiStore.activeCategory || DEFAULT_HOME_CATEGORY);
-const showPagination = computed(() => total.value > pageSize.value);
+const pageTotal = computed(() => {
+  if (pageSize.value <= 0) {
+    return 0;
+  }
+
+  return Math.ceil(total.value / pageSize.value);
+});
+const showPagination = computed(() => pageTotal.value > 1);
 const visiblePageNumbers = computed(() => {
   const totalPages = pageTotal.value;
   if (totalPages <= 0) {
@@ -269,6 +275,14 @@ onMounted(() => {
   void initHomePage();
 });
 
+function resolveErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return fallback;
+}
+
 async function initHomePage() {
   try {
     const response = await fetchHomeIndex();
@@ -282,8 +296,8 @@ async function initHomePage() {
     uiStore.setHomeCategories(response.categories ?? [], currentCategory);
     await loadCategoryPage(currentCategory, 1);
     skipNextCategoryWatch.value = false;
-  } catch {
-    errorMessage.value = "首页数据加载失败，请稍后重试。";
+  } catch (error) {
+    errorMessage.value = resolveErrorMessage(error, "首页数据加载失败，请稍后重试。");
   }
 }
 
@@ -294,19 +308,23 @@ async function loadCategoryPage(category: string, page: number) {
   try {
     const response = await fetchCategoryArticles(category, page, DEFAULT_PAGE_SIZE);
     applyCategoryResponse(response);
-  } catch {
-    errorMessage.value = "分类文章加载失败，请稍后重试。";
+  } catch (error) {
+    errorMessage.value = resolveErrorMessage(error, "分类文章加载失败，请稍后重试。");
   } finally {
     loading.value = false;
   }
 }
 
 function applyCategoryResponse(response: CategoryArticleListResponse) {
+  const nextPageSize = Math.max(1, Number(response.pageSize ?? DEFAULT_PAGE_SIZE));
+  const nextTotal = Math.max(0, Number(response.total ?? 0));
+  const nextPageTotal = Math.ceil(nextTotal / nextPageSize);
+  const nextPageNum = Math.max(1, Number(response.pageNum ?? 1));
+
   displayArticles.value = response.articles?.list ?? [];
-  currentPage.value = response.pageNum ?? 1;
-  pageSize.value = response.pageSize ?? DEFAULT_PAGE_SIZE;
-  pageTotal.value = response.pageTotal ?? 0;
-  total.value = response.total ?? 0;
+  pageSize.value = nextPageSize;
+  total.value = nextTotal;
+  currentPage.value = nextPageTotal > 0 ? Math.min(nextPageNum, nextPageTotal) : 1;
 }
 
 function goToPage(page: number) {

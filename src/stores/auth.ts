@@ -1,13 +1,6 @@
 import { defineStore } from "pinia";
 import http from "@/api/http";
-
-type ApiResponse<T> = {
-  status: {
-    code: number;
-    msg: string;
-  };
-  result: T;
-};
+import { type ApiResponse, unwrapApiResponse } from "@/api/response";
 
 export type LoginStatusResult = {
   loggedIn: boolean;
@@ -58,8 +51,7 @@ export const useAuthStore = defineStore("auth", {
 
       try {
         const { data } = await http.get<ApiResponse<LoginStatusResult>>("/login/status");
-        const result = data.status.code === 0 ? data.result : null;
-        return this.setUser(result);
+        return this.setUser(unwrapApiResponse(data));
       } catch {
         this.user = null;
         return null;
