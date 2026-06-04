@@ -272,8 +272,17 @@ watch(
 );
 
 onMounted(() => {
+  // clearHomeLocalStorage();
   void initHomePage();
 });
+
+// function clearHomeLocalStorage() {
+//   try {
+//     window.localStorage.clear();
+//   } catch {
+//     // Ignore storage access failures so the home page can still render.
+//   }
+// }
 
 function resolveErrorMessage(error: unknown, fallback: string) {
   if (error instanceof Error && error.message) {

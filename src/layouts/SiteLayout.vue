@@ -13,7 +13,6 @@
           </nav>
         </div>
         <div class="site-header__right">
-          <template v-if="authStore.loggedIn">
             <button
               class="write-trigger brand-gradient"
               :disabled="openingEditor"
@@ -23,7 +22,7 @@
               {{ openingEditor ? "准备中..." : "写文章" }}
             </button>
 
-            <div ref="userMenuRef" class="user-menu" :class="{ 'user-menu--open': userMenuOpen }">
+            <div v-if="authStore.loggedIn" ref="userMenuRef" class="user-menu" :class="{ 'user-menu--open': userMenuOpen }">
               <button class="user-menu__trigger" type="button" @click="toggleUserMenu">
                 <span class="user-menu__avatar">
                   <img
@@ -50,9 +49,7 @@
                 <button class="user-menu__item user-menu__item--danger" type="button" @click="logout">登出</button>
               </div>
             </div>
-          </template>
-
-          <button v-else-if="authStore.initialized" class="login-trigger" type="button" @click="uiStore.setLoginOpen(true)">
+          <button v-if="!authStore.loggedIn && authStore.initialized" class="login-trigger" type="button" @click="uiStore.setLoginOpen(true)">
             登录
           </button>
         </div>
@@ -120,7 +117,7 @@ const backendOrigin = computed(() => {
 const showPhotoAvatar = computed(() => !!authStore.user?.photo && !avatarLoadError.value);
 const adminHomeUrl = computed(() => `${backendOrigin.value}/admin`);
 const personalHomeUrl = computed(() =>
-  authStore.user ? `${backendOrigin.value}/user/home?userId=${authStore.user.userId}` : "",
+  authStore.user?.userId ? `${backendOrigin.value}/user/home?userId=${authStore.user.userId}` : "",
 );
 
 watch(
@@ -164,6 +161,15 @@ const openArticleEditor = async () => {
   openingEditor.value = true;
 
   try {
+    if (!authStore.initialized) {
+      await authStore.fetchLoginStatus();
+    }
+
+    if (!authStore.loggedIn) {
+      uiStore.setLoginOpen(true);
+      return;
+    }
+
     await ensureArticleEditorReady(backendOrigin.value);
     const articleEditorUrl = router.resolve({ name: "write-article" }).href;
     window.open(articleEditorUrl, "_blank", "noopener");
@@ -185,12 +191,17 @@ const openPersonalHome = () => {
   openInNewTab(personalHomeUrl.value);
 };
 
-const buildApiPath = (path: string) => `${apiBaseUrl.replace(/\/$/, "")}${path}`;
-
-const logout = () => {
+const logout = async () => {
   userMenuOpen.value = false;
-  authStore.clearUser();
-  window.location.assign(buildApiPath("/logout"));
+
+  try {
+    await authStore.logout();
+    if (route.meta.requiresAuth) {
+      await router.push("/");
+    }
+  } catch (value) {
+    ElMessage.error(extractApiErrorMessage(value, "Logout failed, please try again later."));
+  }
 };
 
 onMounted(() => {
@@ -486,6 +497,10 @@ onBeforeUnmount(() => {
 
   .site-header__right {
     gap: 8px;
+  }
+
+  .auth-debug {
+    display: none;
   }
 
   .login-trigger {

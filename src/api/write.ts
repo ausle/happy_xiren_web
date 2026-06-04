@@ -1,4 +1,3 @@
-import axios from "axios";
 import http from "@/api/http";
 import { type ApiResponse, extractApiErrorMessage, unwrapApiResponse } from "@/api/response";
 import type { HomeCategory, HomeTag } from "@/types/home";
@@ -118,7 +117,7 @@ export async function submitArticle(payload: PublishArticlePayload) {
 
 export async function ensureArticleEditorReady(origin: string) {
   const requestUrl = new URL(ARTICLE_EDIT_PATH, origin).toString();
-  const response = await axios.get<string>(requestUrl, {
+  const response = await http.get<string>(requestUrl, {
     withCredentials: true,
     headers: {
       Accept: "text/html,application/xhtml+xml",

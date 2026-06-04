@@ -52,6 +52,7 @@ import { useRouter } from "vue-router";
 import http from "@/api/http";
 import { type ApiResponse, extractApiErrorMessage, unwrapApiResponse } from "@/api/response";
 import { useAuthStore } from "@/stores/auth";
+import { setAuthTokens } from "@/utils/authToken";
 
 const emit = defineEmits<{
   close: [];
@@ -75,8 +76,19 @@ const toFormData = (payload: Record<string, string>) => {
 };
 
 const postForm = async <T>(url: string, payload: Record<string, string>) => {
-  const { data } = await http.post<ApiResponse<T>>(url, toFormData(payload));
-  return unwrapApiResponse(data);
+  const response = await http.post<ApiResponse<T>>(url, toFormData(payload));
+  return {
+    data: unwrapApiResponse(response.data),
+    headers: response.headers,
+  };
+};
+
+type LoginTokenResponse = {
+  Authorization?: string;
+  authorization?: string;
+  jwt?: string;
+  refreshToken?: string;
+  token?: string;
 };
 
 const handleLogin = async () => {
@@ -94,9 +106,23 @@ const handleLogin = async () => {
   try {
     username.value = normalizedUsername;
     password.value = normalizedPassword;
-    await postForm<boolean>("/login/username", {
+    const loginResponse = await postForm<LoginTokenResponse | boolean>("/login/username", {
       username: normalizedUsername,
       password: normalizedPassword,
+    });
+    const bodyToken =
+      typeof loginResponse.data === "object" && loginResponse.data
+        ? loginResponse.data.Authorization ?? loginResponse.data.authorization ?? loginResponse.data.token ?? loginResponse.data.jwt
+        : "";
+    const headerToken =
+      loginResponse.headers.authorization ??
+      loginResponse.headers.Authorization ??
+      loginResponse.headers.token;
+    const refreshToken =
+      typeof loginResponse.data === "object" && loginResponse.data ? loginResponse.data.refreshToken ?? "" : "";
+    setAuthTokens({
+      token: bodyToken || headerToken,
+      refreshToken,
     });
     await authStore.fetchLoginStatus();
     emit("close");
