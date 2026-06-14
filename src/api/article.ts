@@ -1,6 +1,15 @@
 import http from "@/api/http";
-import { parseAndUnwrapApiResponse } from "@/api/response";
+import { parseAndUnwrapApiResponse, type ApiResponse, unwrapApiResponse } from "@/api/response";
 import type { HomeArticle, SideBarSection } from "@/types/home";
+
+export const ARTICLE_FAVOR_TYPE = {
+  PRAISE: 2,
+  COLLECTION: 3,
+  CANCEL_PRAISE: 4,
+  CANCEL_COLLECTION: 5,
+} as const;
+
+export type ArticleFavorType = (typeof ARTICLE_FAVOR_TYPE)[keyof typeof ARTICLE_FAVOR_TYPE];
 
 export interface ArticleDetailComment {
   commentId?: number;
@@ -42,4 +51,12 @@ export async function fetchArticleDetail(articleId: number, urlSlug?: string) {
   });
 
   return parseAndUnwrapApiResponse<ArticleDetailResponse>(data);
+}
+
+export async function favorArticle(articleId: number, type: ArticleFavorType) {
+  const { data } = await http.get<ApiResponse<boolean> | boolean>("/article/favor", {
+    params: { articleId, type },
+  });
+
+  return unwrapApiResponse(data);
 }

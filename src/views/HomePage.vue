@@ -133,35 +133,25 @@
             </article>
           </div>
 
-          <nav v-if="showPagination" class="pagination" aria-label="文章分页">
-            <button class="pagination__item" :disabled="currentPage <= 1" type="button" @click="goToPage(1)">
-              首页
-            </button>
-            <button class="pagination__item" :disabled="currentPage <= 1" type="button" @click="goToPage(currentPage - 1)">
-              上一页
-            </button>
-            <button
-              v-for="page in visiblePageNumbers"
-              :key="page"
-              class="pagination__item"
-              :class="{ active: page === currentPage }"
-              type="button"
-              @click="goToPage(page)"
-            >
-              {{ page }}
-            </button>
-            <button
-              class="pagination__item"
-              :disabled="currentPage >= pageTotal"
-              type="button"
-              @click="goToPage(currentPage + 1)"
-            >
-              下一页
-            </button>
-            <button class="pagination__item" :disabled="currentPage >= pageTotal" type="button" @click="goToPage(pageTotal)">
-              尾页
-            </button>
-          </nav>
+          <div ref="bottomSentinel" class="article-list__sentinel" aria-hidden="true" />
+
+          <div
+            v-if="loadingMore"
+            class="article-list__load-more"
+            aria-live="polite"
+            aria-busy="true"
+          >
+            <span class="article-list__spinner" />
+            <span>正在加载更多文章...</span>
+          </div>
+
+          <div v-else-if="loadMoreErrorMessage" class="article-list__load-more article-list__load-more--error">
+            {{ loadMoreErrorMessage }}
+          </div>
+
+          <div v-else-if="!hasMoreArticles" class="article-list__load-more article-list__load-more--end">
+            没有更多文章了
+          </div>
         </template>
 
         <div v-else class="article-list__state">
@@ -174,7 +164,7 @@
 
 <script setup lang="ts">
 import { ArrowRight, Eye } from "lucide-vue-next";
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { fetchCategoryArticles, fetchHomeIndex } from "@/api/home";
 import { DEFAULT_HOME_CATEGORY, useUiStore } from "@/stores/ui";
@@ -187,19 +177,24 @@ interface PortfolioCard {
   href?: string;
 }
 
-const DEFAULT_PAGE_SIZE = 12;
-const MAX_VISIBLE_PAGES = 7;
+const DEFAULT_PAGE_SIZE = 10;
 
 const uiStore = useUiStore();
 const router = useRouter();
 const loading = ref(false);
+const loadingMore = ref(false);
 const errorMessage = ref("");
+const loadMoreErrorMessage = ref("");
 const displayArticles = ref<HomeArticle[]>([]);
 const currentPage = ref(1);
 const pageSize = ref(DEFAULT_PAGE_SIZE);
 const total = ref(0);
+const hasMoreArticles = ref(false);
 const skipNextCategoryWatch = ref(false);
+const bottomSentinel = ref<HTMLElement | null>(null);
 const loadingPlaceholders = Array.from({ length: DEFAULT_PAGE_SIZE }, (_, index) => index);
+let activeCategoryRequestId = 0;
+let bottomObserver: IntersectionObserver | null = null;
 
 const portfolioCards: PortfolioCard[] = [
   {
@@ -232,28 +227,6 @@ const pageTotal = computed(() => {
 
   return Math.ceil(total.value / pageSize.value);
 });
-const showPagination = computed(() => pageTotal.value > 1);
-const visiblePageNumbers = computed(() => {
-  const totalPages = pageTotal.value;
-  if (totalPages <= 0) {
-    return [];
-  }
-
-  if (totalPages <= MAX_VISIBLE_PAGES) {
-    return Array.from({ length: totalPages }, (_, index) => index + 1);
-  }
-
-  const half = Math.floor(MAX_VISIBLE_PAGES / 2);
-  let start = Math.max(1, currentPage.value - half);
-  let end = start + MAX_VISIBLE_PAGES - 1;
-
-  if (end > totalPages) {
-    end = totalPages;
-    start = end - MAX_VISIBLE_PAGES + 1;
-  }
-
-  return Array.from({ length: end - start + 1 }, (_, index) => start + index);
-});
 
 watch(
   () => uiStore.activeCategory,
@@ -271,9 +244,22 @@ watch(
   },
 );
 
+watch(
+  [bottomSentinel, hasMoreArticles, loading, loadingMore, () => displayArticles.value.length],
+  async () => {
+    await nextTick();
+    syncBottomObserver();
+  },
+  { flush: "post" },
+);
+
 onMounted(() => {
   // clearHomeLocalStorage();
   void initHomePage();
+});
+
+onBeforeUnmount(() => {
+  disconnectBottomObserver();
 });
 
 // function clearHomeLocalStorage() {
@@ -310,44 +296,139 @@ async function initHomePage() {
   }
 }
 
-async function loadCategoryPage(category: string, page: number) {
-  loading.value = true;
-  errorMessage.value = "";
+async function loadCategoryPage(category: string, page: number, append = false) {
+  const requestId = ++activeCategoryRequestId;
+
+  if (append) {
+    loadingMore.value = true;
+    loadMoreErrorMessage.value = "";
+  } else {
+    loading.value = true;
+    loadingMore.value = false;
+    errorMessage.value = "";
+    loadMoreErrorMessage.value = "";
+  }
 
   try {
     const response = await fetchCategoryArticles(category, page, DEFAULT_PAGE_SIZE);
-    applyCategoryResponse(response);
+    if (requestId !== activeCategoryRequestId) {
+      return;
+    }
+
+    applyCategoryResponse(response, append);
   } catch (error) {
+    if (requestId !== activeCategoryRequestId) {
+      return;
+    }
+
+    if (append) {
+      loadMoreErrorMessage.value = resolveErrorMessage(error, "更多文章加载失败，请稍后重试。");
+      return;
+    }
+
+    displayArticles.value = [];
+    hasMoreArticles.value = false;
+    total.value = 0;
+    currentPage.value = 1;
     errorMessage.value = resolveErrorMessage(error, "分类文章加载失败，请稍后重试。");
   } finally {
-    loading.value = false;
+    if (requestId !== activeCategoryRequestId) {
+      return;
+    }
+
+    if (append) {
+      loadingMore.value = false;
+    } else {
+      loading.value = false;
+    }
   }
 }
 
-function applyCategoryResponse(response: CategoryArticleListResponse) {
+function applyCategoryResponse(response: CategoryArticleListResponse, append: boolean) {
   const nextPageSize = Math.max(1, Number(response.pageSize ?? DEFAULT_PAGE_SIZE));
   const nextTotal = Math.max(0, Number(response.total ?? 0));
   const nextPageTotal = Math.ceil(nextTotal / nextPageSize);
   const nextPageNum = Math.max(1, Number(response.pageNum ?? 1));
+  const nextArticles = response.articles?.list ?? [];
 
-  displayArticles.value = response.articles?.list ?? [];
+  displayArticles.value = append ? mergeArticles(displayArticles.value, nextArticles) : nextArticles;
   pageSize.value = nextPageSize;
   total.value = nextTotal;
   currentPage.value = nextPageTotal > 0 ? Math.min(nextPageNum, nextPageTotal) : 1;
+  hasMoreArticles.value =
+    typeof response.articles?.hasMore === "boolean"
+      ? response.articles.hasMore
+      : currentPage.value < nextPageTotal;
 }
 
-function goToPage(page: number) {
-  if (page < 1 || page > pageTotal.value || page === currentPage.value || loading.value) {
+function mergeArticles(currentArticles: HomeArticle[], nextArticles: HomeArticle[]) {
+  const articleMap = new Map<number, HomeArticle>();
+
+  currentArticles.forEach((article) => {
+    articleMap.set(article.articleId, article);
+  });
+
+  nextArticles.forEach((article) => {
+    articleMap.set(article.articleId, article);
+  });
+
+  return Array.from(articleMap.values());
+}
+
+function loadNextPage() {
+  if (loading.value || loadingMore.value || !hasMoreArticles.value) {
     return;
   }
-  void loadCategoryPage(currentCategoryLabel.value, page);
+
+  const nextPage = currentPage.value + 1;
+  if (pageTotal.value > 0 && nextPage > pageTotal.value) {
+    hasMoreArticles.value = false;
+    return;
+  }
+
+  void loadCategoryPage(currentCategoryLabel.value, nextPage, true);
 }
 
 function selectCategory(category: string) {
-  if (category === uiStore.activeCategory || loading.value) {
+  if (category === uiStore.activeCategory || loading.value || loadingMore.value) {
     return;
   }
   uiStore.setActiveCategory(category);
+}
+
+function disconnectBottomObserver() {
+  bottomObserver?.disconnect();
+  bottomObserver = null;
+}
+
+function syncBottomObserver() {
+  disconnectBottomObserver();
+
+  if (
+    typeof window === "undefined" ||
+    typeof IntersectionObserver === "undefined" ||
+    !bottomSentinel.value ||
+    !displayArticles.value.length ||
+    !hasMoreArticles.value ||
+    loading.value ||
+    loadingMore.value
+  ) {
+    return;
+  }
+
+  bottomObserver = new IntersectionObserver(
+    (entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        loadNextPage();
+      }
+    },
+    {
+      rootMargin: "0px 0px 180px 0px",
+      threshold: 0.1,
+    },
+  );
+
+  bottomObserver.observe(bottomSentinel.value);
 }
 
 function getArticleTags(article: HomeArticle) {
@@ -836,41 +917,36 @@ function openArticle(article: HomeArticle) {
   color: #dc2626;
 }
 
-.pagination {
+.article-list__sentinel {
+  width: 100%;
+  height: 1px;
+}
+
+.article-list__load-more {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
   gap: 12px;
   margin-top: 42px;
+  color: #6b7280;
+  font-size: 14px;
 }
 
-.pagination__item {
-  min-width: 44px;
-  min-height: 44px;
-  border: 1px solid transparent;
+.article-list__load-more--error {
+  color: #dc2626;
+}
+
+.article-list__load-more--end {
+  color: #9ca3af;
+}
+
+.article-list__spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(17, 24, 39, 0.12);
+  border-top-color: #111827;
   border-radius: 999px;
-  padding: 0 14px;
-  background: transparent;
-  color: #4b5563;
-  font-size: 16px;
-  cursor: pointer;
-  transition: background-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
-}
-
-.pagination__item:hover:not(:disabled) {
-  transform: translateY(-1px);
-  color: #111827;
-}
-
-.pagination__item.active {
-  background: #5d6776;
-  color: #ffffff;
-}
-
-.pagination__item:disabled {
-  color: #c0c4cc;
-  cursor: not-allowed;
+  animation: article-spin 0.8s linear infinite;
 }
 
 @keyframes shimmer {
@@ -880,6 +956,16 @@ function openArticle(article: HomeArticle) {
 
   100% {
     background-position: -200% 0;
+  }
+}
+
+@keyframes article-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
   }
 }
 
@@ -930,17 +1016,6 @@ function openArticle(article: HomeArticle) {
 
   .article-loading__title {
     font-size: 18px;
-  }
-
-  .pagination {
-    gap: 8px;
-  }
-
-  .pagination__item {
-    min-width: 40px;
-    min-height: 40px;
-    font-size: 14px;
-    padding: 0 12px;
   }
 }
 

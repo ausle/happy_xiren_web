@@ -20,12 +20,9 @@ export async function fetchCategoryArticles(category: string, page = 1, size = 1
   }
 
   const request = http
-    .get<ApiResponse<CategoryArticleListResponse> | CategoryArticleListResponse>(
-      `/article/category/${encodeURIComponent(category)}`,
-      {
-        params: { page, size },
-      },
-    )
+    .get<ApiResponse<CategoryArticleListResponse> | CategoryArticleListResponse>("/article/category", {
+      params: { category, page, size },
+    })
     .then(({ data }) => unwrapApiResponse(data))
     .finally(() => {
       categoryArticleRequestCache.delete(cacheKey);

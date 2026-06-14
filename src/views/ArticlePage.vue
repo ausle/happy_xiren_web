@@ -18,7 +18,7 @@
       <div v-else-if="article" class="article-layout">
         <div class="side-actions">
           <div class="side-actions__sticky">
-            <button class="side-action" :class="{ active: liked, orange: liked }" type="button" @click="handleLike">
+            <button class="side-action" :class="{ active: liked, orange: liked }" :disabled="likePending" type="button" @click="handleLike">
               <div class="side-action__circle">
                 <ThumbsUp :size="17" :fill="liked ? '#F4830A' : 'none'" />
               </div>
@@ -28,13 +28,13 @@
               <div class="side-action__circle">
                 <MessageCircle :size="17" />
               </div>
-              <span>{{ comments.length }}</span>
+              <span>{{ article.commentCount }}</span>
             </button>
-            <button class="side-action" :class="{ active: bookmarked }" type="button" @click="bookmarked = !bookmarked">
+            <button class="side-action" :class="{ active: bookmarked }" :disabled="bookmarkPending" type="button" @click="handleBookmark">
               <div class="side-action__circle">
                 <Bookmark :size="17" :fill="bookmarked ? '#6C63FF' : 'none'" />
               </div>
-              <span>收藏</span>
+              <span>{{ collectionCount }}</span>
             </button>
           </div>
         </div>
@@ -71,7 +71,7 @@
             <div class="article-card__body markdown-body" v-html="article.contentHtml" />
 
             <div class="like-section">
-              <button class="like-section__button" :class="{ active: liked }" type="button" @click="handleLike">
+              <button class="like-section__button" :class="{ active: liked }" :disabled="likePending" type="button" @click="handleLike">
                 <ThumbsUp :size="22" :fill="liked ? '#F4830A' : 'none'" />
               </button>
               <div class="like-section__line">
@@ -101,7 +101,7 @@
               </div>
 
               <div class="comment-list">
-                <h3 class="comment-list__title"><span>{{ comments.length }}</span> 条评论</h3>
+                <h3 class="comment-list__title"><span>{{ article.commentCount }}</span> 条评论</h3>
 
                 <div v-if="!comments.length" class="comment-list__empty">还没有评论，欢迎发表第一条评论。</div>
 
@@ -169,13 +169,20 @@
             </div>
           </div>
 
-          <div v-if="tocItems.length" class="panel sidebar-panel">
+          <div v-if="tocItems.length" class="panel sidebar-panel sidebar-panel--toc">
             <h4 class="sidebar-panel__title">目录</h4>
             <div class="sidebar-toc">
-              <div v-for="item in tocItems" :key="item" class="sidebar-toc__item">
+              <button
+                v-for="item in tocItems"
+                :key="item.id"
+                class="sidebar-toc__item"
+                :class="`level-${item.level}`"
+                type="button"
+                @click="scrollToHeading(item.id)"
+              >
                 <span class="sidebar-toc__dot" />
-                <span>{{ item }}</span>
-              </div>
+                <span>{{ item.text }}</span>
+              </button>
             </div>
           </div>
 
@@ -191,6 +198,7 @@
               <p class="sidebar-related__title line-clamp-2">{{ related.title }}</p>
             </div>
           </div>
+
         </aside>
       </div>
 
@@ -199,16 +207,26 @@
         <RouterLink class="missing-state__link" to="/">返回首页</RouterLink>
       </div>
     </div>
+
   </div>
 </template>
 
 <script setup lang="ts">
 import { ArrowLeft, Bookmark, Eye, MessageCircle, ThumbsUp } from "lucide-vue-next";
+import { ElMessage } from "element-plus";
 import { computed, reactive, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
-import { fetchArticleDetail, type ArticleDetailAuthor, type ArticleDetailComment } from "@/api/article";
+import {
+  ARTICLE_FAVOR_TYPE,
+  favorArticle,
+  fetchArticleDetail,
+  type ArticleDetailAuthor,
+  type ArticleDetailComment,
+} from "@/api/article";
+import { extractApiErrorMessage } from "@/api/response";
 import BaseAvatar from "@/components/common/BaseAvatar.vue";
 import type { SideBarSection } from "@/types/home";
+import { renderArticleContent } from "@/utils/articleContent";
 
 interface CommentItem {
   id: number;
@@ -235,10 +253,17 @@ interface ArticleViewModel {
   date: string;
   views: number;
   likes: number;
+  collectionCount: number;
   commentCount: number;
   tags: string[];
   contentHtml: string;
   author: ArticleAuthorViewModel;
+}
+
+interface TocItem {
+  id: string;
+  text: string;
+  level: number;
 }
 
 interface RelatedArticle {
@@ -257,12 +282,15 @@ const router = useRouter();
 const commentRef = ref<HTMLElement | null>(null);
 const liked = ref(false);
 const bookmarked = ref(false);
+const likePending = ref(false);
+const bookmarkPending = ref(false);
 const loading = ref(false);
 const errorMessage = ref("");
 const article = ref<ArticleViewModel | null>(null);
 const comments = ref<CommentItem[]>([]);
 const commentText = ref("");
 const likeCount = ref(0);
+const collectionCount = ref(0);
 const articleAuthor = ref<ArticleDetailAuthor | null>(null);
 const sideBarSections = ref<SideBarSection[]>([]);
 const commentLikeState = reactive<Record<number, boolean>>({});
@@ -351,9 +379,10 @@ async function loadArticle() {
       date: formatTimestamp(detail.article.createTime ?? detail.article.lastUpdateTime),
       views: detail.article.count?.readCount ?? 0,
       likes: detail.article.count?.praiseCount ?? 0,
-      commentCount: detail.article.count?.commentCount ?? detail.comments?.length ?? 0,
+      collectionCount: detail.article.count?.collectionCount ?? 0,
+      commentCount: detail.article.count?.commentCount ?? 0,
       tags: (detail.article.tags ?? []).map((item) => item.tag).filter(Boolean),
-      contentHtml: detail.article.content ?? "",
+      contentHtml: renderArticleContent(detail.article.content),
       author: {
         name: authorName,
         initials: getInitials(authorName),
@@ -363,7 +392,12 @@ async function loadArticle() {
     articleAuthor.value = detail.author ?? null;
     sideBarSections.value = detail.sideBarItems ?? [];
     comments.value = (detail.comments ?? []).map(mapComment);
-    resetInteractiveState(detail.article.praised === true, detail.article.collected === true, detail.article.count?.praiseCount ?? 0);
+    resetInteractiveState(
+      detail.article.praised === true,
+      detail.article.collected === true,
+      detail.article.count?.praiseCount ?? 0,
+      detail.article.count?.collectionCount ?? 0,
+    );
   } catch (error) {
     resetArticleState();
     errorMessage.value = getErrorMessage(error);
@@ -378,15 +412,19 @@ function resetArticleState() {
   articleAuthor.value = null;
   sideBarSections.value = [];
   likeCount.value = 0;
+  collectionCount.value = 0;
   liked.value = false;
   bookmarked.value = false;
+  likePending.value = false;
+  bookmarkPending.value = false;
 }
 
-function resetInteractiveState(initialLiked: boolean, initialBookmarked: boolean, initialLikes: number) {
+function resetInteractiveState(initialLiked: boolean, initialBookmarked: boolean, initialLikes: number, initialCollections: number) {
   liked.value = initialLiked;
   bookmarked.value = initialBookmarked;
   commentText.value = "";
   likeCount.value = initialLikes;
+  collectionCount.value = initialCollections;
 
   Object.keys(commentLikeState).forEach((key) => delete commentLikeState[Number(key)]);
   Object.keys(commentLikeCounts).forEach((key) => delete commentLikeCounts[Number(key)]);
@@ -434,13 +472,19 @@ function formatTimestamp(value?: number | null) {
   });
 }
 
-function extractHeadings(html: string) {
-  const matches = Array.from(html.matchAll(/<h[1-3][^>]*>(.*?)<\/h[1-3]>/gi));
-  return matches.map((item) => stripHtml(item[1])).filter(Boolean);
-}
+function extractHeadings(html: string): TocItem[] {
+  if (!html) {
+    return [];
+  }
 
-function stripHtml(html: string) {
-  return html.replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").trim();
+  const contentDocument = new DOMParser().parseFromString(html, "text/html");
+  return Array.from(contentDocument.querySelectorAll<HTMLHeadingElement>("h1, h2, h3"))
+    .map((heading) => ({
+      id: heading.id,
+      text: heading.textContent?.trim() ?? "",
+      level: Number(heading.tagName.slice(1)),
+    }))
+    .filter((item) => item.id && item.text);
 }
 
 function parseArticleRoute(url?: string | null) {
@@ -478,10 +522,62 @@ function getErrorMessage(error: unknown) {
   return "文章详情加载失败，请稍后重试。";
 }
 
-const handleLike = () => {
-  liked.value = !liked.value;
-  likeCount.value += liked.value ? 1 : -1;
-};
+async function handleLike() {
+  await submitArticleFavor("like");
+}
+
+async function handleBookmark() {
+  await submitArticleFavor("bookmark");
+}
+
+async function submitArticleFavor(action: "like" | "bookmark") {
+  if (!article.value || (action === "like" ? likePending.value : bookmarkPending.value)) {
+    return;
+  }
+
+  const targetArticleId = article.value.id;
+  const currentActive = action === "like" ? liked.value : bookmarked.value;
+  const nextActive = !currentActive;
+  const type =
+    action === "like"
+      ? nextActive
+        ? ARTICLE_FAVOR_TYPE.PRAISE
+        : ARTICLE_FAVOR_TYPE.CANCEL_PRAISE
+      : nextActive
+        ? ARTICLE_FAVOR_TYPE.COLLECTION
+        : ARTICLE_FAVOR_TYPE.CANCEL_COLLECTION;
+
+  if (action === "like") {
+    likePending.value = true;
+  } else {
+    bookmarkPending.value = true;
+  }
+
+  try {
+    await favorArticle(targetArticleId, type);
+    if (article.value?.id !== targetArticleId) {
+      return;
+    }
+
+    if (action === "like") {
+      liked.value = nextActive;
+      likeCount.value = Math.max(0, likeCount.value + (nextActive ? 1 : -1));
+      article.value.likes = likeCount.value;
+    } else {
+      bookmarked.value = nextActive;
+      collectionCount.value = Math.max(0, collectionCount.value + (nextActive ? 1 : -1));
+      article.value.collectionCount = collectionCount.value;
+    }
+  } catch (error) {
+    ElMessage.error(extractApiErrorMessage(error, "操作失败，请稍后重试"));
+  } finally {
+    if (action === "like") {
+      likePending.value = false;
+    } else {
+      bookmarkPending.value = false;
+    }
+  }
+}
 
 const toggleCommentLike = (id: number) => {
   commentLikeState[id] = !commentLikeState[id];
@@ -490,6 +586,10 @@ const toggleCommentLike = (id: number) => {
 
 const scrollToComments = () => {
   commentRef.value?.scrollIntoView({ behavior: "smooth", block: "start" });
+};
+
+const scrollToHeading = (headingId: string) => {
+  document.getElementById(headingId)?.scrollIntoView({ behavior: "smooth", block: "start" });
 };
 
 const submitComment = () => {
@@ -539,6 +639,10 @@ const openArticle = (id: number, slug?: string) => {
   padding: 24px 0 48px;
 }
 
+.article-wrap {
+  max-width: 1480px;
+}
+
 .back-button {
   display: inline-flex;
   align-items: center;
@@ -551,8 +655,8 @@ const openArticle = (id: number, slug?: string) => {
 
 .article-layout {
   display: grid;
-  grid-template-columns: 52px minmax(0, 1fr) 260px;
-  gap: 24px;
+  grid-template-columns: 72px minmax(0, 1fr) 320px;
+  gap: 28px;
 }
 
 .side-actions__sticky {
@@ -571,14 +675,14 @@ const openArticle = (id: number, slug?: string) => {
   align-items: center;
   gap: 4px;
   color: #9ca3af;
-  font-size: 11px;
+  font-size: 12px;
   cursor: pointer;
 }
 
 .side-action__circle {
   display: flex;
-  width: 40px;
-  height: 40px;
+  width: 46px;
+  height: 46px;
   align-items: center;
   justify-content: center;
   border: 1.5px solid #e5e7eb;
@@ -710,6 +814,7 @@ const openArticle = (id: number, slug?: string) => {
 .article-card__body :deep(h3) {
   color: #111827;
   font-weight: 700;
+  scroll-margin-top: 96px;
 }
 
 .article-card__body :deep(h1) {
@@ -733,6 +838,15 @@ const openArticle = (id: number, slug?: string) => {
   margin: 14px 0;
 }
 
+.article-card__body :deep(ul),
+.article-card__body :deep(ol) {
+  padding-left: 1.5em;
+}
+
+.article-card__body :deep(li + li) {
+  margin-top: 6px;
+}
+
 .article-card__body :deep(img) {
   max-width: 100%;
   border-radius: 16px;
@@ -750,12 +864,60 @@ const openArticle = (id: number, slug?: string) => {
   font-family: "IBM Plex Mono", Consolas, monospace;
 }
 
+.article-card__body :deep(:not(pre) > code) {
+  border-radius: 6px;
+  background: #f3f4f6;
+  padding: 0.15em 0.4em;
+  color: #b45309;
+}
+
 .article-card__body :deep(blockquote) {
   margin: 20px 0;
   border-left: 4px solid #f97316;
   background: #fff7ed;
   padding: 12px 16px;
   color: #9a3412;
+}
+
+.article-card__body :deep(a) {
+  color: #2563eb;
+  text-decoration: underline;
+  text-decoration-color: rgba(37, 99, 235, 0.28);
+  text-underline-offset: 3px;
+  word-break: break-word;
+}
+
+.article-card__body :deep(a:hover) {
+  color: #1d4ed8;
+}
+
+.article-card__body :deep(hr) {
+  margin: 24px 0;
+  border: 0;
+  border-top: 1px solid #e5e7eb;
+}
+
+.article-card__body :deep(table) {
+  width: 100%;
+  margin: 20px 0;
+  border-collapse: collapse;
+  overflow: hidden;
+  border-radius: 12px;
+  font-size: 14px;
+}
+
+.article-card__body :deep(th),
+.article-card__body :deep(td) {
+  border: 1px solid #e5e7eb;
+  padding: 10px 12px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.article-card__body :deep(th) {
+  background: #f9fafb;
+  color: #111827;
+  font-weight: 600;
 }
 
 .like-section {
@@ -1010,12 +1172,31 @@ const openArticle = (id: number, slug?: string) => {
 }
 
 .article-sidebar {
-  width: 260px;
+  width: 320px;
 }
 
 .sidebar-panel {
   margin-bottom: 16px;
-  padding: 20px;
+  padding: 24px;
+}
+
+.sidebar-panel--toc {
+  position: sticky;
+  top: 88px;
+  z-index: 10;
+  max-height: calc(100vh - 184px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #d1d5db transparent;
+}
+
+.sidebar-panel--toc::-webkit-scrollbar {
+  width: 5px;
+}
+
+.sidebar-panel--toc::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: #d1d5db;
 }
 
 .sidebar-panel__label,
@@ -1025,12 +1206,12 @@ const openArticle = (id: number, slug?: string) => {
 
 .sidebar-panel__label {
   color: #6b7280;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .sidebar-panel__title {
   color: #111827;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
 }
 
@@ -1092,12 +1273,24 @@ const openArticle = (id: number, slug?: string) => {
 }
 
 .sidebar-toc__item {
+  width: 100%;
   display: flex;
   align-items: flex-start;
   gap: 8px;
+  padding: 0;
   color: #6b7280;
   font-size: 12px;
   line-height: 1.6;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sidebar-toc__item:hover {
+  color: #f4830a;
+}
+
+.sidebar-toc__item.level-3 {
+  padding-left: 14px;
 }
 
 .sidebar-toc__dot {
@@ -1169,12 +1362,13 @@ const openArticle = (id: number, slug?: string) => {
 
 @media (max-width: 1200px) {
   .article-layout {
-    grid-template-columns: 52px minmax(0, 1fr);
+    grid-template-columns: 72px minmax(0, 1fr);
   }
 
   .article-sidebar {
     display: none;
   }
+
 }
 
 @media (max-width: 900px) {
@@ -1191,5 +1385,6 @@ const openArticle = (id: number, slug?: string) => {
     padding-left: 20px;
     padding-right: 20px;
   }
+
 }
 </style>
