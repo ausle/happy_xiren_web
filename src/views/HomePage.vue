@@ -4,31 +4,82 @@
       <div class="page-shell">
         <div class="hero-panel">
           <div class="hero-panel__inner">
-            <p class="hero-panel__eyebrow">PORTFOLIO</p>
-            <h1 class="hero-panel__title">程序与想象</h1>
-            <p class="hero-panel__description">
-              我是 Chance，热爱编程，也喜欢把灵感做成真实可用的作品。这里记录设计、前后端实现，
-              以及那些从想法走到落地的过程。
-            </p>
+            <div class="hero-panel__copy">
+              <p class="hero-panel__eyebrow">PORTFOLIO / LAB NOTES</p>
+              <h1 class="hero-panel__title">把灵感做成真正能跑的作品</h1>
+              <p class="hero-panel__description">
+                我是 Chance，喜欢把编程、设计和内容实验串起来。这里记录从想法、原型、前后端实现，
+                到上线复盘的完整过程。
+              </p>
 
-            <div class="hero-panel__divider" />
-
-            <div class="hero-card-grid">
-              <article
-                v-for="card in portfolioCards"
-                :key="card.title"
-                class="hero-card"
-                :class="{ 'hero-card--clickable': !!card.href }"
-                @click="openPortfolioCard(card)"
-              >
-                <div class="hero-card__top">
-                  <p class="hero-card__label">{{ card.label }}</p>
-                  <ArrowRight class="hero-card__arrow" :size="16" />
+              <div class="hero-panel__metrics" aria-label="站点内容概览">
+                <div v-for="metric in heroMetrics" :key="metric.label" class="hero-panel__metric">
+                  <strong>{{ metric.value }}</strong>
+                  <span>{{ metric.label }}</span>
                 </div>
-                <h3 class="hero-card__title line-clamp-2">{{ card.title }}</h3>
-                <p class="hero-card__summary line-clamp-2">{{ card.summary }}</p>
-              </article>
+              </div>
             </div>
+
+            <div class="hero-panel__visual">
+              <img
+                class="hero-panel__photo"
+                :src="activeHeroSlide.image"
+                :alt="activeHeroSlide.alt"
+              />
+              <button
+                class="hero-carousel__nav hero-carousel__nav--prev"
+                type="button"
+                aria-label="上一张轮播图"
+                @click="showPreviousHeroSlide"
+              >
+                ‹
+              </button>
+              <button
+                class="hero-carousel__nav hero-carousel__nav--next"
+                type="button"
+                aria-label="下一张轮播图"
+                @click="showNextHeroSlide"
+              >
+                ›
+              </button>
+              <div class="hero-panel__photo-caption">
+                <span class="hero-panel__photo-dot" />
+                <div>
+                  <strong>{{ activeHeroSlide.title }}</strong>
+                  <small>{{ activeHeroSlide.subtitle }}</small>
+                </div>
+              </div>
+              <div class="hero-carousel__dots" aria-label="首页图片轮播">
+                <button
+                  v-for="(slide, index) in heroSlides"
+                  :key="slide.title"
+                  class="hero-carousel__dot"
+                  :class="{ active: index === activeHeroSlideIndex }"
+                  type="button"
+                  :aria-label="`切换到 ${slide.title}`"
+                  @click="setHeroSlide(index)"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div class="hero-panel__divider" />
+
+          <div class="hero-card-grid">
+            <article
+              v-for="card in portfolioCards"
+              :key="card.title"
+              class="hero-card"
+              :class="{ 'hero-card--clickable': !!card.href }"
+              @click="openPortfolioCard(card)"
+            >
+              <div class="hero-card__top">
+                <p class="hero-card__label">{{ card.label }}</p>
+                <ArrowRight class="hero-card__arrow" :size="16" />
+              </div>
+              <h3 class="hero-card__title line-clamp-2">{{ card.title }}</h3>
+              <p class="hero-card__summary line-clamp-2">{{ card.summary }}</p>
+            </article>
           </div>
         </div>
       </div>
@@ -167,6 +218,14 @@ import { ArrowRight, Eye } from "lucide-vue-next";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { fetchCategoryArticles, fetchHomeIndex } from "@/api/home";
+import heroCarouselGamingUrl from "@/assets/hero-carousel-gaming.webp";
+import heroCarouselLifeUrl from "@/assets/hero-carousel-life.webp";
+import heroCarouselLoveUrl from "@/assets/hero-carousel-love.webp";
+import heroCarouselNightCodeUrl from "@/assets/hero-carousel-night-code.webp";
+import heroCarouselOutdoorUrl from "@/assets/hero-carousel-outdoor.webp";
+import heroCarouselReadingUrl from "@/assets/hero-carousel-reading.webp";
+import heroCarouselTravelUrl from "@/assets/hero-carousel-travel.webp";
+import heroCarouselWorkUrl from "@/assets/hero-carousel-work.webp";
 import { DEFAULT_HOME_CATEGORY, useUiStore } from "@/stores/ui";
 import type { CategoryArticleListResponse, HomeArticle } from "@/types/home";
 
@@ -193,13 +252,74 @@ const hasMoreArticles = ref(false);
 const skipNextCategoryWatch = ref(false);
 const bottomSentinel = ref<HTMLElement | null>(null);
 const loadingPlaceholders = Array.from({ length: DEFAULT_PAGE_SIZE }, (_, index) => index);
+const activeHeroSlideIndex = ref(0);
 let activeCategoryRequestId = 0;
 let bottomObserver: IntersectionObserver | null = null;
+let heroCarouselTimer: number | undefined;
+
+const heroMetrics = [
+  { value: "Works", label: "项目作品" },
+  { value: "Notes", label: "开发手记" },
+  { value: "Ship", label: "持续迭代" },
+];
+
+const heroSlides = [
+  {
+    image: heroCarouselWorkUrl,
+    title: "Coding Mode",
+    subtitle: "typing code in daylight",
+    alt: "动漫风年轻开发者穿白色上衣和蓝色外套，在明亮工作台前敲代码",
+  },
+  {
+    image: heroCarouselLifeUrl,
+    title: "Cafe Reset",
+    subtitle: "quiet coffee and notebook",
+    alt: "动漫风咖啡馆桌面静物，有咖啡、笔记本和电脑",
+  },
+  {
+    image: heroCarouselTravelUrl,
+    title: "Travel Notes",
+    subtitle: "ideas collected on the road",
+    alt: "动漫风年轻男性穿米色外套，背包站在明亮旅行场景中",
+  },
+  {
+    image: heroCarouselGamingUrl,
+    title: "Game Night",
+    subtitle: "playful focus after work",
+    alt: "动漫风年轻男性穿红黑夹克，在夜晚游戏房中打游戏",
+  },
+  {
+    image: heroCarouselLoveUrl,
+    title: "With Love",
+    subtitle: "a warm walk at blue hour",
+    alt: "动漫风年轻男性穿奶油色毛衣，与爱人在傍晚街道散步",
+  },
+  {
+    image: heroCarouselReadingUrl,
+    title: "Study Desk",
+    subtitle: "books, rain and quiet growth",
+    alt: "动漫风无人图书馆学习桌，有书、电脑和暖色台灯",
+  },
+  {
+    image: heroCarouselOutdoorUrl,
+    title: "Fresh Air",
+    subtitle: "weekend energy outside",
+    alt: "动漫风年轻男性穿绿色户外夹克，在公园或山坡上微笑",
+  },
+  {
+    image: heroCarouselNightCodeUrl,
+    title: "Night Build",
+    subtitle: "late code and city lights",
+    alt: "动漫风年轻男性穿黑色高领，在夜晚桌前敲代码",
+  },
+];
+
+const activeHeroSlide = computed(() => heroSlides[activeHeroSlideIndex.value] ?? heroSlides[0]);
 
 const portfolioCards: PortfolioCard[] = [
   {
     label: "COLLECTION",
-    title: "Vibe Coding 开发指北",
+    title: "Vibe Coding 开发手记",
     summary: "记录从灵感、设计到网页落地的真实开发过程。",
   },
   {
@@ -209,7 +329,7 @@ const portfolioCards: PortfolioCard[] = [
   },
   {
     label: "GITHUB",
-    title: "开源仓库",
+    title: "开源仓库与小工具",
     summary: "沉淀模板、工具和实验性小项目，持续更新中。",
   },
 ];
@@ -256,10 +376,12 @@ watch(
 onMounted(() => {
   // clearHomeLocalStorage();
   void initHomePage();
+  startHeroCarousel();
 });
 
 onBeforeUnmount(() => {
   disconnectBottomObserver();
+  stopHeroCarousel();
 });
 
 // function clearHomeLocalStorage() {
@@ -269,6 +391,36 @@ onBeforeUnmount(() => {
 //     // Ignore storage access failures so the home page can still render.
 //   }
 // }
+
+function startHeroCarousel() {
+  stopHeroCarousel();
+  heroCarouselTimer = window.setInterval(() => {
+    activeHeroSlideIndex.value = (activeHeroSlideIndex.value + 1) % heroSlides.length;
+  }, 4200);
+}
+
+function stopHeroCarousel() {
+  if (heroCarouselTimer) {
+    window.clearInterval(heroCarouselTimer);
+    heroCarouselTimer = undefined;
+  }
+}
+
+function setHeroSlide(index: number) {
+  activeHeroSlideIndex.value = index;
+  startHeroCarousel();
+}
+
+function showPreviousHeroSlide() {
+  activeHeroSlideIndex.value =
+    (activeHeroSlideIndex.value - 1 + heroSlides.length) % heroSlides.length;
+  startHeroCarousel();
+}
+
+function showNextHeroSlide() {
+  activeHeroSlideIndex.value = (activeHeroSlideIndex.value + 1) % heroSlides.length;
+  startHeroCarousel();
+}
 
 function resolveErrorMessage(error: unknown, fallback: string) {
   if (error instanceof Error && error.message) {
@@ -456,19 +608,6 @@ function formatCount(value?: number | null) {
   return `${value}`;
 }
 
-function getArticleDisplayType(article: HomeArticle) {
-  const tag = getArticleTags(article)[0];
-  const mapping: Record<string, string> = {
-    后端: "Backend",
-    前端: "Frontend",
-    Java: "Article",
-    AI: "Article",
-    架构: "Architecture",
-    源码: "Source",
-  };
-  return `- ${mapping[tag ?? ""] ?? "Article"} -`;
-}
-
 function getArticleCover(article: HomeArticle, index: number) {
   if (article.cover) {
     return article.cover;
@@ -494,7 +633,6 @@ function getArticleCover(article: HomeArticle, index: number) {
       <circle cx="1030" cy="160" r="160" fill="rgba(255,255,255,0.10)" />
       <circle cx="240" cy="620" r="220" fill="rgba(255,255,255,0.08)" />
       <path d="M70 520 C 260 410, 410 330, 640 430 S 980 590, 1150 430" stroke="rgba(255,255,255,0.72)" stroke-width="18" fill="none" stroke-linecap="round"/>
-      <text x="78" y="110" fill="rgba(255,255,255,0.96)" font-size="40" font-family="Inter, Arial, sans-serif">${getArticleDisplayType(article).replace(/&/g, "&amp;")}</text>
       <text x="78" y="660" fill="rgba(255,255,255,0.16)" font-size="150" font-weight="700" font-family="Inter, Arial, sans-serif">${article.title.slice(0, 10).replace(/&/g, "&amp;")}</text>
     </svg>
   `;
@@ -515,24 +653,41 @@ function openArticle(article: HomeArticle) {
 
 <style scoped>
 .hero-section {
-  padding: 42px 0 10px;
+  padding: 36px 0 12px;
 }
 
 .hero-panel {
-  background: #ffffff;
-  padding: 34px 0 12px;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(18, 19, 26, 0.08);
+  border-radius: 32px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.94) 0%, rgba(241, 247, 255, 0.9) 58%, rgba(236, 253, 245, 0.9) 100%);
+  padding: 46px 46px 34px;
+  box-shadow: 0 28px 70px rgba(18, 19, 26, 0.1);
 }
 
-.hero-panel::after {
-  content: none;
+.hero-panel::before {
+  position: absolute;
+  inset: auto -12% -38% 42%;
+  height: 420px;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(37, 99, 235, 0.14), transparent 62%);
+  content: "";
+  pointer-events: none;
 }
 
 .hero-panel__inner {
   position: relative;
   z-index: 1;
-  max-width: 980px;
-  margin: 0 auto;
-  text-align: center;
+  display: grid;
+  grid-template-columns: minmax(0, 1.12fr) minmax(340px, 0.88fr);
+  align-items: center;
+  gap: 40px;
+}
+
+.hero-panel__copy {
+  min-width: 0;
 }
 
 .hero-panel__eyebrow {
@@ -541,60 +696,245 @@ function openArticle(article: HomeArticle) {
   justify-content: center;
   min-height: 40px;
   margin: 0;
-  border: 1px solid rgba(148, 163, 184, 0.32);
+  border: 1px solid rgba(37, 99, 235, 0.18);
   border-radius: 999px;
-  padding: 0 18px;
-  color: #6b7280;
+  background: rgba(37, 99, 235, 0.07);
+  padding: 0 16px;
+  color: #2563eb;
   font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0.18em;
+  font-weight: 800;
+  letter-spacing: 0.13em;
   text-transform: uppercase;
 }
 
 .hero-panel__title {
-  margin: 28px 0 18px;
-  color: #111827;
-  font-family: "Noto Serif SC", "Songti SC", "STSong", serif;
-  font-size: clamp(46px, 7vw, 78px);
-  font-weight: 600;
-  letter-spacing: -0.05em;
-  line-height: 1.04;
+  max-width: 720px;
+  margin: 26px 0 18px;
+  color: var(--text-primary);
+  font-size: clamp(44px, 5.8vw, 76px);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 0.98;
 }
 
 .hero-panel__description {
-  max-width: 760px;
-  margin: 0 auto;
-  color: #6b7280;
-  font-size: 16px;
-  line-height: 1.95;
+  max-width: 620px;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 17px;
+  line-height: 1.9;
+}
+
+.hero-panel__metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 28px;
+}
+
+.hero-panel__metric {
+  min-width: 112px;
+  border: 1px solid rgba(18, 19, 26, 0.08);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.68);
+  padding: 14px 16px;
+  box-shadow: 0 12px 26px rgba(18, 19, 26, 0.06);
+}
+
+.hero-panel__metric strong,
+.hero-panel__metric span {
+  display: block;
+}
+
+.hero-panel__metric strong {
+  color: var(--text-primary);
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.hero-panel__metric span {
+  margin-top: 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.hero-panel__visual {
+  position: relative;
+  aspect-ratio: 3 / 2;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 24px;
+  background: #ffffff;
+  box-shadow: 0 26px 64px rgba(18, 19, 26, 0.16);
+}
+
+.hero-panel__photo {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 52% 48%;
+  filter: saturate(1.02) contrast(1.01);
+  animation: hero-image-in 0.45s ease both;
+}
+
+.hero-carousel__nav {
+  position: absolute;
+  top: 50%;
+  z-index: 2;
+  display: inline-flex;
+  width: 36px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  transform: translateY(-50%);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  color: rgba(18, 19, 26, 0.78);
+  font-size: 28px;
+  line-height: 1;
+  box-shadow: 0 12px 28px rgba(18, 19, 26, 0.14);
+  backdrop-filter: blur(16px);
+  transition: transform 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+}
+
+.hero-carousel__nav:hover {
+  transform: translateY(-50%) scale(1.06);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--text-primary);
+}
+
+.hero-carousel__nav--prev {
+  left: 16px;
+}
+
+.hero-carousel__nav--next {
+  right: 16px;
+}
+
+.hero-panel__photo-caption {
+  position: absolute;
+  right: 18px;
+  bottom: 48px;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  max-width: calc(100% - 36px);
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.82);
+  padding: 12px 14px;
+  box-shadow: 0 16px 34px rgba(18, 19, 26, 0.16);
+  backdrop-filter: blur(18px);
+}
+
+.hero-carousel__dots {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.68);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.7);
+  padding: 8px 10px;
+  box-shadow: 0 12px 28px rgba(18, 19, 26, 0.12);
+  backdrop-filter: blur(16px);
+}
+
+.hero-carousel__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(18, 19, 26, 0.24);
+  cursor: pointer;
+  transition: width 0.2s ease, background-color 0.2s ease;
+}
+
+.hero-carousel__dot.active {
+  width: 22px;
+  background: #2563eb;
+}
+
+.hero-panel__photo-dot {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: #16a34a;
+  box-shadow: 0 0 0 7px rgba(22, 163, 74, 0.14);
+}
+
+.hero-panel__photo-caption strong,
+.hero-panel__photo-caption small {
+  display: block;
+}
+
+.hero-panel__photo-caption strong {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.hero-panel__photo-caption small {
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+@keyframes hero-image-in {
+  from {
+    opacity: 0;
+    transform: scale(1.015);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .hero-panel__divider {
-  width: min(100%, 292px);
+  position: relative;
+  z-index: 1;
+  width: 100%;
   height: 1px;
-  margin: 28px auto 0;
-  background: linear-gradient(90deg, transparent 0%, rgba(148, 163, 184, 0.34) 20%, rgba(148, 163, 184, 0.34) 80%, transparent 100%);
+  margin: 34px 0 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(18, 19, 26, 0.12) 16%, rgba(18, 19, 26, 0.12) 84%, transparent 100%);
 }
 
 .hero-card-grid {
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
-  margin-top: 34px;
+  gap: 16px;
+  margin-top: 26px;
 }
 
 .hero-card {
   display: flex;
-  min-height: 128px;
+  min-height: 142px;
   flex-direction: column;
   gap: 14px;
-  border: 1px solid rgba(148, 163, 184, 0.16);
+  border: 1px solid rgba(18, 19, 26, 0.08);
   border-radius: 22px;
-  background: rgba(255, 255, 255, 0.76);
-  padding: 16px 18px 18px;
+  background: rgba(255, 255, 255, 0.66);
+  padding: 18px 20px 20px;
   text-align: left;
   transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
-  backdrop-filter: blur(10px);
+  backdrop-filter: blur(14px);
 }
 
 .hero-card--clickable {
@@ -602,10 +942,10 @@ function openArticle(article: HomeArticle) {
 }
 
 .hero-card:hover {
-  transform: translateY(-3px);
-  border-color: rgba(249, 115, 22, 0.2);
-  background: rgba(255, 255, 255, 0.94);
-  box-shadow: 0 18px 34px rgba(15, 23, 42, 0.06);
+  transform: translateY(-4px);
+  border-color: rgba(37, 99, 235, 0.18);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 18px 38px rgba(37, 99, 235, 0.1);
 }
 
 .hero-card__top {
@@ -617,10 +957,10 @@ function openArticle(article: HomeArticle) {
 
 .hero-card__label {
   margin: 0;
-  color: #7c6f64;
+  color: #2563eb;
   font-family: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 800;
   letter-spacing: 0.12em;
 }
 
@@ -637,41 +977,42 @@ function openArticle(article: HomeArticle) {
 
 .hero-card__title {
   margin: 0;
-  color: #111827;
+  color: var(--text-primary);
   font-size: 18px;
-  font-weight: 700;
+  font-weight: 800;
   line-height: 1.45;
 }
 
 .hero-card__summary {
   margin: 0;
-  color: #6b7280;
+  color: var(--text-secondary);
   font-size: 13px;
   line-height: 1.75;
 }
 
 .hero-category-section {
-  padding: 8px 0 0;
-  background: #ffffff;
+  padding: 10px 0 0;
+  background: transparent;
 }
 
 .hero-category-bar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  border-bottom: 1px solid rgba(18, 19, 26, 0.08);
   padding: 0 0 22px;
-  border-bottom: 1px solid #ececec;
 }
 
 .hero-category {
-  min-height: 42px;
-  border: 1px solid #d1d5db;
+  min-height: 40px;
+  border: 1px solid rgba(18, 19, 26, 0.08);
   border-radius: 999px;
   padding: 0 18px;
-  color: #374151;
+  background: rgba(255, 255, 255, 0.64);
+  color: var(--text-secondary);
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 700;
   line-height: 1.2;
   cursor: pointer;
   transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
@@ -680,19 +1021,22 @@ function openArticle(article: HomeArticle) {
 .hero-category:hover,
 .hero-category.active {
   color: #111827;
-  border-color: #111827;
+  border-color: rgba(37, 99, 235, 0.24);
+  background: #ffffff;
   transform: translateY(-1px);
 }
 
 .hero-category.active {
-  background: #111827;
+  border-color: #12131a;
+  background: #12131a;
   color: #ffffff;
+  box-shadow: 0 14px 28px rgba(18, 19, 26, 0.14);
 }
 
 .home-content {
-  padding-top: 28px;
-  padding-bottom: 36px;
-  background: #ffffff;
+  padding-top: 30px;
+  padding-bottom: 44px;
+  background: transparent;
 }
 
 .article-list {
@@ -736,7 +1080,7 @@ function openArticle(article: HomeArticle) {
 .article-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 34px 30px;
+  gap: 26px;
 }
 
 .article-grid--loading {
@@ -745,7 +1089,20 @@ function openArticle(article: HomeArticle) {
 
 .article-card {
   min-width: 0;
+  border: 1px solid rgba(18, 19, 26, 0.08);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.78);
+  padding: 12px;
+  box-shadow: 0 14px 34px rgba(18, 19, 26, 0.06);
   cursor: pointer;
+  transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease, background-color 0.22s ease;
+}
+
+.article-card:hover {
+  transform: translateY(-5px);
+  border-color: rgba(37, 99, 235, 0.16);
+  background: #ffffff;
+  box-shadow: 0 22px 46px rgba(18, 19, 26, 0.11);
 }
 
 .article-card--skeleton {
@@ -754,11 +1111,11 @@ function openArticle(article: HomeArticle) {
 
 .article-card__image-wrap {
   overflow: hidden;
-  border: 1px solid rgba(17, 24, 39, 0.08);
-  border-radius: 16px;
+  border: 1px solid rgba(18, 19, 26, 0.08);
+  border-radius: 18px;
   background: #f8fafc;
   aspect-ratio: 1.48 / 1;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.4);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.54);
 }
 
 .article-card__image-wrap--skeleton {
@@ -779,17 +1136,22 @@ function openArticle(article: HomeArticle) {
 }
 
 .article-card__title {
-  margin: 14px 0 8px;
-  color: #111827;
+  margin: 14px 4px 8px;
+  color: var(--text-primary);
   font-size: 17px;
-  font-weight: 700;
+  font-weight: 800;
   line-height: 1.45;
+  min-height: calc(1.45em * 2);
+  max-height: calc(1.45em * 2);
+  overflow: hidden;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .article-card__summary {
-  margin: 0;
+  margin: 0 4px;
   display: -webkit-box;
-  color: #6b7280;
+  color: var(--text-secondary);
   font-size: 13px;
   line-height: 1.7;
   overflow: hidden;
@@ -806,8 +1168,8 @@ function openArticle(article: HomeArticle) {
   align-items: flex-end;
   justify-content: space-between;
   gap: 12px;
-  margin-top: 14px;
-  color: #6b7280;
+  margin: 14px 4px 0;
+  color: var(--text-muted);
   font-size: 13px;
 }
 
@@ -832,8 +1194,9 @@ function openArticle(article: HomeArticle) {
 }
 
 .article-card__tag {
-  color: #7c6f64;
+  color: #2563eb;
   font-size: 12px;
+  font-weight: 700;
   line-height: 1.35;
 }
 
@@ -980,6 +1343,19 @@ function openArticle(article: HomeArticle) {
 }
 
 @media (max-width: 1024px) {
+  .hero-panel {
+    padding: 38px 30px 30px;
+  }
+
+  .hero-panel__inner {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+
+  .hero-panel__visual {
+    aspect-ratio: 16 / 9;
+  }
+
   .hero-card-grid {
     grid-template-columns: 1fr;
   }
@@ -991,14 +1367,15 @@ function openArticle(article: HomeArticle) {
 
 @media (max-width: 900px) {
   .hero-panel {
-    padding: 28px 0 10px;
+    padding: 32px 24px 24px;
   }
 }
 
 @media (max-width: 768px) {
   .hero-panel__title {
     margin-top: 24px;
-    font-size: clamp(38px, 14vw, 58px);
+    font-size: clamp(38px, 12vw, 56px);
+    letter-spacing: -0.035em;
   }
 
   .hero-panel__description {
@@ -1008,6 +1385,14 @@ function openArticle(article: HomeArticle) {
 
   .hero-card-grid {
     gap: 12px;
+  }
+
+  .hero-panel__metrics {
+    gap: 10px;
+  }
+
+  .hero-panel__metric {
+    min-width: calc(50% - 5px);
   }
 
   .article-loading {
@@ -1025,8 +1410,8 @@ function openArticle(article: HomeArticle) {
   }
 
   .hero-panel {
-    border-radius: 26px;
-    padding: 34px 18px 18px;
+    border-radius: 24px;
+    padding: 28px 18px 18px;
   }
 
   .hero-panel__eyebrow {
@@ -1036,6 +1421,27 @@ function openArticle(article: HomeArticle) {
 
   .hero-panel__description {
     font-size: 14px;
+  }
+
+  .hero-panel__visual {
+    aspect-ratio: 4 / 3;
+  }
+
+  .hero-carousel__nav {
+    width: 32px;
+    height: 32px;
+    font-size: 24px;
+  }
+
+  .hero-panel__photo-caption {
+    right: 12px;
+    bottom: 44px;
+    left: 12px;
+  }
+
+  .hero-carousel__dots {
+    right: 12px;
+    bottom: 12px;
   }
 
   .hero-category-section {

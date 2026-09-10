@@ -86,8 +86,10 @@
                 <BaseAvatar initials="我" :size="36" />
                 <div class="comment-editor__box">
                   <textarea
+                    ref="commentTextareaRef"
                     v-model="commentText"
                     class="comment-editor__textarea"
+                    maxlength="512"
                     placeholder="写下你的评论..."
                     rows="3"
                   />
@@ -214,7 +216,7 @@
 <script setup lang="ts">
 import { ArrowLeft, Bookmark, Eye, MessageCircle, ThumbsUp } from "lucide-vue-next";
 import { ElMessage } from "element-plus";
-import { computed, reactive, ref, watch } from "vue";
+import { computed, nextTick, reactive, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 import {
   ARTICLE_FAVOR_TYPE,
@@ -225,6 +227,8 @@ import {
 } from "@/api/article";
 import { extractApiErrorMessage } from "@/api/response";
 import BaseAvatar from "@/components/common/BaseAvatar.vue";
+import { useAuthStore } from "@/stores/auth";
+import { useUiStore } from "@/stores/ui";
 import type { SideBarSection } from "@/types/home";
 import { renderArticleContent } from "@/utils/articleContent";
 
@@ -279,7 +283,10 @@ interface RelatedArticle {
 
 const route = useRoute();
 const router = useRouter();
+const authStore = useAuthStore();
+const uiStore = useUiStore();
 const commentRef = ref<HTMLElement | null>(null);
+const commentTextareaRef = ref<HTMLTextAreaElement | null>(null);
 const liked = ref(false);
 const bookmarked = ref(false);
 const likePending = ref(false);
@@ -522,6 +529,12 @@ function getErrorMessage(error: unknown) {
   return "文章详情加载失败，请稍后重试。";
 }
 
+function isUnauthorizedError(error: unknown) {
+  return typeof error === "object" && error !== null && "response" in error
+    ? (error as { response?: { status?: number } }).response?.status === 401
+    : false;
+}
+
 async function handleLike() {
   await submitArticleFavor("like");
 }
@@ -530,8 +543,25 @@ async function handleBookmark() {
   await submitArticleFavor("bookmark");
 }
 
+async function ensureAuthenticated() {
+  if (!authStore.initialized) {
+    await authStore.fetchLoginStatus();
+  }
+
+  if (authStore.loggedIn) {
+    return true;
+  }
+
+  uiStore.setLoginOpen(true);
+  return false;
+}
+
 async function submitArticleFavor(action: "like" | "bookmark") {
   if (!article.value || (action === "like" ? likePending.value : bookmarkPending.value)) {
+    return;
+  }
+
+  if (!(await ensureAuthenticated())) {
     return;
   }
 
@@ -569,6 +599,12 @@ async function submitArticleFavor(action: "like" | "bookmark") {
       article.value.collectionCount = collectionCount.value;
     }
   } catch (error) {
+    if (isUnauthorizedError(error)) {
+      authStore.clearUser();
+      uiStore.setLoginOpen(true);
+      return;
+    }
+
     ElMessage.error(extractApiErrorMessage(error, "操作失败，请稍后重试"));
   } finally {
     if (action === "like") {
@@ -584,24 +620,31 @@ const toggleCommentLike = (id: number) => {
   commentLikeCounts[id] += commentLikeState[id] ? 1 : -1;
 };
 
-const scrollToComments = () => {
+const scrollToComments = async () => {
   commentRef.value?.scrollIntoView({ behavior: "smooth", block: "start" });
+  await nextTick();
+  commentTextareaRef.value?.focus();
 };
 
 const scrollToHeading = (headingId: string) => {
   document.getElementById(headingId)?.scrollIntoView({ behavior: "smooth", block: "start" });
 };
 
-const submitComment = () => {
+const submitComment = async () => {
   const value = commentText.value.trim();
   if (!value) {
     return;
   }
 
+  if (!(await ensureAuthenticated())) {
+    return;
+  }
+
+  const currentUserName = authStore.user?.username || "我";
   const newComment: CommentItem = {
     id: Date.now(),
-    author: "我",
-    initials: "我",
+    author: currentUserName,
+    initials: getInitials(currentUserName),
     color: "#6C63FF",
     date: formatTimestamp(Date.now()),
     content: value,
@@ -613,6 +656,9 @@ const submitComment = () => {
   commentLikeState[newComment.id] = false;
   commentLikeCounts[newComment.id] = 0;
   commentText.value = "";
+  if (article.value) {
+    article.value.commentCount += 1;
+  }
 };
 
 const goToAuthor = () => {
@@ -640,7 +686,13 @@ const openArticle = (id: number, slug?: string) => {
 }
 
 .article-wrap {
-  max-width: 1480px;
+  max-width: 1440px;
+}
+
+@media (min-width: 2200px) {
+  .article-wrap {
+    max-width: 2080px;
+  }
 }
 
 .back-button {
@@ -657,6 +709,16 @@ const openArticle = (id: number, slug?: string) => {
   display: grid;
   grid-template-columns: 72px minmax(0, 1fr) 320px;
   gap: 28px;
+  max-width: 1480px;
+  margin: 0 auto;
+}
+
+@media (min-width: 2200px) {
+  .article-layout {
+    grid-template-columns: 80px minmax(0, 1fr) 360px;
+    gap: 32px;
+    max-width: 1760px;
+  }
 }
 
 .side-actions__sticky {

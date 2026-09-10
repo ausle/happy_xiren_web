@@ -109,15 +109,19 @@ import { crossPlatforms, domesticPlatforms, overseasPlatforms } from "@/data/tra
 
 <style scoped>
 .traffic-page {
-  padding-top: 48px;
-  padding-bottom: 48px;
+  padding-top: 52px;
+  padding-bottom: 56px;
 }
 
 .traffic-page__tag {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 8px;
   margin-bottom: 24px;
+  border: 1px solid rgba(37, 99, 235, 0.16);
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.07);
+  padding: 6px 12px 6px 8px;
 }
 
 .traffic-page__tag-icon {
@@ -126,34 +130,42 @@ import { crossPlatforms, domesticPlatforms, overseasPlatforms } from "@/data/tra
   height: 28px;
   align-items: center;
   justify-content: center;
-  border-radius: 10px;
-  background: #6c63ff;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #2563eb, #06b6d4);
 }
 
 .traffic-page__tag span {
-  color: #6b7280;
+  color: #2563eb;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 800;
 }
 
 .traffic-page__title {
   margin: 0 0 16px;
-  color: #111827;
-  font-size: 40px;
-  font-weight: 700;
-  line-height: 1.2;
+  max-width: 760px;
+  color: var(--text-primary);
+  font-size: clamp(38px, 5vw, 64px);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1.02;
 }
 
 .traffic-page__subtitle {
-  max-width: 580px;
+  max-width: 680px;
   margin: 0 0 64px;
-  color: #9ca3af;
-  font-size: 14px;
-  line-height: 1.75;
+  color: var(--text-secondary);
+  font-size: 16px;
+  line-height: 1.85;
 }
 
 .traffic-section {
-  margin-bottom: 64px;
+  margin-bottom: 52px;
+  border: 1px solid rgba(18, 19, 26, 0.08);
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.62);
+  padding: 28px;
+  box-shadow: 0 18px 46px rgba(18, 19, 26, 0.06);
+  backdrop-filter: blur(16px);
 }
 
 .traffic-section__head {
@@ -165,9 +177,9 @@ import { crossPlatforms, domesticPlatforms, overseasPlatforms } from "@/data/tra
 
 .traffic-section__head h2 {
   margin: 0;
-  color: #111827;
-  font-size: 20px;
-  font-weight: 700;
+  color: var(--text-primary);
+  font-size: 22px;
+  font-weight: 800;
 }
 
 .traffic-section__icon {
@@ -180,7 +192,7 @@ import { crossPlatforms, domesticPlatforms, overseasPlatforms } from "@/data/tra
 }
 
 .traffic-section__icon--purple {
-  background: #ede9fe;
+  background: #dbeafe;
 }
 
 .traffic-section__icon--orange {
@@ -193,14 +205,14 @@ import { crossPlatforms, domesticPlatforms, overseasPlatforms } from "@/data/tra
 
 .traffic-section__subtitle {
   margin: 0 0 24px 44px;
-  color: #9ca3af;
+  color: var(--text-muted);
   font-size: 14px;
 }
 
 .traffic-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  gap: 14px;
 }
 
 .traffic-grid--single {
@@ -210,13 +222,16 @@ import { crossPlatforms, domesticPlatforms, overseasPlatforms } from "@/data/tra
 
 .traffic-card {
   padding: 20px;
+  background: rgba(255, 255, 255, 0.78);
   cursor: pointer;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
 }
 
 .traffic-card:hover {
-  border-color: #e5e7eb;
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+  transform: translateY(-4px);
+  border-color: rgba(37, 99, 235, 0.18);
+  background: #ffffff;
+  box-shadow: 0 18px 38px rgba(18, 19, 26, 0.1);
 }
 
 .traffic-card__top {
@@ -240,7 +255,8 @@ import { crossPlatforms, domesticPlatforms, overseasPlatforms } from "@/data/tra
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  border-radius: 12px;
+  border-radius: 14px;
+  box-shadow: 0 10px 22px rgba(18, 19, 26, 0.12);
 }
 
 .traffic-card__name {
@@ -248,14 +264,14 @@ import { crossPlatforms, domesticPlatforms, overseasPlatforms } from "@/data/tra
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  color: #111827;
+  color: var(--text-primary);
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 800;
 }
 
 .traffic-card__badge {
   border-radius: 8px;
-  background: #1e293b;
+  background: #12131a;
   padding: 2px 8px;
   color: #ffffff;
   font-size: 12px;
@@ -269,7 +285,7 @@ import { crossPlatforms, domesticPlatforms, overseasPlatforms } from "@/data/tra
 
 .traffic-card__desc {
   margin: 12px 0 0 48px;
-  color: #9ca3af;
+  color: var(--text-muted);
   font-size: 12px;
   line-height: 1.6;
 }
@@ -282,7 +298,11 @@ import { crossPlatforms, domesticPlatforms, overseasPlatforms } from "@/data/tra
 
 @media (max-width: 640px) {
   .traffic-page__title {
-    font-size: 32px;
+    font-size: 36px;
+  }
+
+  .traffic-section {
+    padding: 20px;
   }
 
   .traffic-grid {

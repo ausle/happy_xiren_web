@@ -5,10 +5,15 @@ const DEFAULT_REFRESH_THRESHOLD_MS = 5 * 60 * 1000;
 
 type JwtPayload = {
   exp?: number;
+  authorities?: Array<string | { authority?: string; role?: string }>;
   photo?: string;
+  role?: string | number;
+  roles?: Array<string | number>;
+  sub?: string;
   userId?: number | string;
   userName?: string;
   username?: string;
+  userRole?: string | number;
 };
 
 export type AuthTokenPair = {

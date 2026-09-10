@@ -22,6 +22,16 @@ const routes = [
         component: () => import("@/views/DocsPage.vue"),
       },
       {
+        path: "lottery",
+        name: "lottery",
+        component: () => import("@/views/LotteryPage.vue"),
+      },
+      {
+        path: "interfaces",
+        name: "interfaces",
+        component: () => import("@/views/InterfaceInvokePage.vue"),
+      },
+      {
         path: "traffic/youtube",
         name: "youtube",
         component: () => import("@/views/YouTubePage.vue"),

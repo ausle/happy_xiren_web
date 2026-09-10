@@ -5,11 +5,15 @@ import { clearAuthTokens, isAuthTokenExpired, parseAuthTokenPayload } from "@/ut
 
 export type LoginStatusResult = {
   loggedIn: boolean;
+  authorities?: Array<string | { authority?: string; role?: string }>;
+  role?: string | number;
+  roles?: Array<string | number>;
   userId?: number | string;
   username?: string;
   userName?: string;
   photo?: string;
   userAvatar?: string;
+  userRole?: string | number;
   riskTip?: string;
 };
 
@@ -17,6 +21,73 @@ export type AuthUser = {
   userId: number;
   username: string;
   photo: string;
+  role: string;
+};
+
+const ADMIN_ROLE = "ADMIN";
+
+const normalizeRole = (value: unknown) => {
+  if (value === 1) {
+    return ADMIN_ROLE;
+  }
+
+  if (typeof value === "number") {
+    return String(value);
+  }
+
+  if (typeof value !== "string") {
+    return "";
+  }
+
+  const normalized = value.trim().toUpperCase();
+  return normalized.startsWith("ROLE_") ? normalized.slice(5) : normalized;
+};
+
+const getRoleFromCollection = (values: unknown) => {
+  if (!Array.isArray(values)) {
+    return "";
+  }
+
+  for (const item of values) {
+    if (typeof item === "object" && item) {
+      const role = getRoleFromValue((item as { authority?: unknown; role?: unknown }).authority) ||
+        getRoleFromValue((item as { authority?: unknown; role?: unknown }).role);
+      if (role) {
+        return role;
+      }
+      continue;
+    }
+
+    const role = getRoleFromValue(item);
+    if (role) {
+      return role;
+    }
+  }
+
+  return "";
+};
+
+const getRoleFromValue = (value: unknown): string => {
+  const normalized = normalizeRole(value);
+  if (normalized) {
+    return normalized;
+  }
+
+  return getRoleFromCollection(value);
+};
+
+const resolveUserRole = (
+  source: Pick<LoginStatusResult, "authorities" | "role" | "roles" | "userRole"> | null | undefined,
+  fallbackUser?: AuthUser | null,
+) => {
+  return (
+    getRoleFromValue(source?.role) ||
+    getRoleFromValue(source?.userRole) ||
+    getRoleFromCollection(source?.roles) ||
+    getRoleFromCollection(source?.authorities) ||
+    fallbackUser?.role ||
+    ""
+  );
 };
 
 export const useAuthStore = defineStore("auth", {
@@ -27,6 +98,7 @@ export const useAuthStore = defineStore("auth", {
   }),
   getters: {
     loggedIn: (state) => !!state.user,
+    isAdmin: (state) => state.user?.role === ADMIN_ROLE,
     initials: (state) => {
       const firstChar = state.user?.username?.trim().charAt(0) ?? "";
       return firstChar ? firstChar.toUpperCase() : "U";
@@ -49,6 +121,7 @@ export const useAuthStore = defineStore("auth", {
         userId: Number.isFinite(resolvedUserId) && resolvedUserId > 0 ? resolvedUserId : 0,
         username,
         photo: result.photo ?? result.userAvatar ?? fallbackUser?.photo ?? "",
+        role: resolveUserRole(result, fallbackUser),
       };
       return this.user;
     },
@@ -60,7 +133,7 @@ export const useAuthStore = defineStore("auth", {
 
       const payload = parseAuthTokenPayload();
       const userId = Number(payload?.userId);
-      const username = payload?.username?.trim() || payload?.userName?.trim() || "";
+      const username = payload?.username?.trim() || payload?.userName?.trim() || payload?.sub?.trim() || "";
       if (!Number.isFinite(userId) || !username) {
         return null;
       }
@@ -69,6 +142,7 @@ export const useAuthStore = defineStore("auth", {
         userId,
         username,
         photo: payload?.photo ?? "",
+        role: resolveUserRole(payload),
       };
       return this.user;
     },

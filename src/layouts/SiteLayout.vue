@@ -8,8 +8,9 @@
           <nav class="site-nav desktop-only">
             <RouterLink class="site-nav__item" :class="{ active: route.path === '/' }" to="/">首页</RouterLink>
             <RouterLink class="site-nav__item" :class="{ active: route.path.startsWith('/traffic') }" to="/traffic">流量</RouterLink>
-            <button class="site-nav__item" type="button">创作</button>
+            <RouterLink class="site-nav__item" :class="{ active: route.path.startsWith('/interfaces') }" to="/interfaces">接口调用</RouterLink>
             <RouterLink class="site-nav__item" :class="{ active: route.path.startsWith('/docs') }" to="/docs">文档</RouterLink>
+            <RouterLink class="site-nav__item" :class="{ active: route.path.startsWith('/lottery') }" to="/lottery">抽奖</RouterLink>
           </nav>
         </div>
         <div class="site-header__right">
@@ -44,7 +45,7 @@
               </button>
 
               <div v-if="userMenuOpen" class="user-menu__dropdown panel">
-                <button class="user-menu__item" type="button" @click="openAdminCenter">管理后台</button>
+                <button v-if="authStore.isAdmin" class="user-menu__item" type="button" @click="openAdminCenter">管理后台</button>
                 <button class="user-menu__item" type="button" @click="openPersonalHome">个人主页</button>
                 <button class="user-menu__item user-menu__item--danger" type="button" @click="logout">登出</button>
               </div>
@@ -58,8 +59,9 @@
         <nav class="site-nav site-nav--mobile">
           <RouterLink class="site-nav__item" :class="{ active: route.path === '/' }" to="/">首页</RouterLink>
           <RouterLink class="site-nav__item" :class="{ active: route.path.startsWith('/traffic') }" to="/traffic">流量</RouterLink>
-          <button class="site-nav__item" type="button">创作</button>
+          <RouterLink class="site-nav__item" :class="{ active: route.path.startsWith('/interfaces') }" to="/interfaces">接口调用</RouterLink>
           <RouterLink class="site-nav__item" :class="{ active: route.path.startsWith('/docs') }" to="/docs">文档</RouterLink>
+          <RouterLink class="site-nav__item" :class="{ active: route.path.startsWith('/lottery') }" to="/lottery">抽奖</RouterLink>
         </nav>
       </div>
 
@@ -94,12 +96,14 @@ import LoginDialog from "@/components/common/LoginDialog.vue";
 import SiteLogo from "@/components/common/SiteLogo.vue";
 import { useAuthStore } from "@/stores/auth";
 import { useUiStore } from "@/stores/ui";
+import { getAuthToken, getRefreshToken } from "@/utils/authToken";
 
 const route = useRoute();
 const router = useRouter();
 const uiStore = useUiStore();
 const authStore = useAuthStore();
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "/api";
+const adminBaseUrl = import.meta.env.VITE_ADMIN_BASE_URL?.trim() ?? "";
 const userMenuOpen = ref(false);
 const avatarLoadError = ref(false);
 const userMenuRef = ref<HTMLElement | null>(null);
@@ -115,7 +119,14 @@ const backendOrigin = computed(() => {
 });
 
 const showPhotoAvatar = computed(() => !!authStore.user?.photo && !avatarLoadError.value);
-const adminHomeUrl = computed(() => `${backendOrigin.value}/admin`);
+const adminHomeUrl = computed(() => {
+  if (adminBaseUrl) {
+    return adminBaseUrl;
+  }
+
+  const isLocalHost = ["localhost", "127.0.0.1"].includes(window.location.hostname);
+  return isLocalHost ? "http://localhost:5174" : `${window.location.origin}/admin`;
+});
 const personalHomeUrl = computed(() =>
   authStore.user?.userId ? `${backendOrigin.value}/user/home?userId=${authStore.user.userId}` : "",
 );
@@ -155,6 +166,25 @@ const openInNewTab = (url: string) => {
   window.open(url, "_blank", "noopener");
 };
 
+const withAdminAuthHandoff = (url: string) => {
+  const token = getAuthToken();
+  if (!token) {
+    return url;
+  }
+
+  const target = new URL(url, window.location.href);
+  const params = new URLSearchParams();
+  params.set("authToken", token);
+
+  const refreshToken = getRefreshToken();
+  if (refreshToken) {
+    params.set("refreshToken", refreshToken);
+  }
+
+  target.hash = params.toString();
+  return target.toString();
+};
+
 const openArticleEditor = async () => {
   if (openingEditor.value) return;
 
@@ -182,7 +212,12 @@ const openArticleEditor = async () => {
 
 const openAdminCenter = () => {
   userMenuOpen.value = false;
-  openInNewTab(adminHomeUrl.value);
+  if (!authStore.isAdmin) {
+    ElMessage.warning("只有管理员可以访问管理后台");
+    return;
+  }
+
+  openInNewTab(withAdminAuthHandoff(adminHomeUrl.value));
 };
 
 const openPersonalHome = () => {
@@ -221,23 +256,25 @@ onBeforeUnmount(() => {
   display: flex;
   min-height: 100vh;
   flex-direction: column;
-  background: #ffffff;
+  background: transparent;
 }
 
 .site-header {
   position: sticky;
   top: 0;
   z-index: 50;
-  border-bottom: 1px solid #f3f4f6;
-  background: #ffffff;
+  border-bottom: 1px solid rgba(18, 19, 26, 0.08);
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 12px 34px rgba(18, 19, 26, 0.05);
+  backdrop-filter: blur(22px);
 }
 
 .site-header__inner {
   display: flex;
-  height: 56px;
+  height: 70px;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 18px;
 }
 
 .site-header__left,
@@ -251,7 +288,7 @@ onBeforeUnmount(() => {
 }
 
 .site-header__spacer {
-  width: 16px;
+  width: 20px;
   flex-shrink: 0;
 }
 
@@ -259,28 +296,35 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   min-width: 0;
+  gap: 4px;
+  border: 1px solid rgba(18, 19, 26, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.62);
+  padding: 4px;
 }
 
 .site-nav__item {
   flex-shrink: 0;
-  border-radius: 10px;
-  padding: 6px 12px;
-  color: #4b5563;
+  border-radius: 999px;
+  padding: 8px 14px;
+  color: var(--text-secondary);
   font-size: 14px;
+  font-weight: 650;
   white-space: nowrap;
-  transition: background-color 0.2s ease, color 0.2s ease;
+  transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
   cursor: pointer;
 }
 
 .site-nav__item:hover {
-  background: #f9fafb;
-  color: #111827;
+  background: rgba(37, 99, 235, 0.08);
+  color: var(--text-primary);
+  transform: translateY(-1px);
 }
 
 .site-nav__item.active {
-  background: #f3f4f6;
-  color: #111827;
-  font-weight: 500;
+  background: #12131a;
+  color: #ffffff;
+  box-shadow: 0 10px 22px rgba(18, 19, 26, 0.16);
 }
 
 .site-header__right {
@@ -292,43 +336,48 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  color: #6b7280;
+  color: var(--text-secondary);
   font-size: 14px;
+  font-weight: 650;
   cursor: pointer;
 }
 
 .login-trigger:hover {
-  color: #111827;
+  color: var(--text-primary);
 }
 
 .login-trigger {
-  border-radius: 10px;
-  padding: 6px 12px;
+  border: 1px solid rgba(18, 19, 26, 0.08);
+  border-radius: 999px;
+  padding: 8px 14px;
+  background: rgba(255, 255, 255, 0.68);
 }
 
 .login-trigger:hover {
-  background: #f9fafb;
+  background: #ffffff;
 }
 
 .write-trigger {
-  min-height: 36px;
+  min-height: 40px;
   border-radius: 999px;
-  padding: 0 16px;
+  padding: 0 18px;
   color: #ffffff;
-  font-size: 13px;
-  font-weight: 600;
-  box-shadow: 0 12px 24px rgba(244, 131, 10, 0.24);
+  font-size: 14px;
+  font-weight: 750;
+  box-shadow: 0 16px 30px rgba(37, 99, 235, 0.22);
   transition: transform 0.14s ease, box-shadow 0.14s ease, filter 0.14s ease;
+  cursor: pointer;
 }
 
 .write-trigger:hover {
-  box-shadow: 0 14px 28px rgba(244, 131, 10, 0.3);
+  transform: translateY(-1px);
+  box-shadow: 0 20px 36px rgba(37, 99, 235, 0.26);
   filter: saturate(1.03);
 }
 
 .write-trigger:active {
   transform: translateY(1px) scale(0.98);
-  box-shadow: 0 8px 16px rgba(244, 131, 10, 0.2);
+  box-shadow: 0 10px 18px rgba(37, 99, 235, 0.18);
 }
 
 .write-trigger:disabled {
@@ -347,7 +396,7 @@ onBeforeUnmount(() => {
   gap: 7px;
   min-height: 40px;
   padding: 0;
-  color: #6b7280;
+  color: var(--text-secondary);
   transition: opacity 0.2s ease, color 0.2s ease;
 }
 
@@ -365,7 +414,7 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
   overflow: hidden;
   border-radius: 999px;
-  background: linear-gradient(180deg, #f4e7ab 0%, #ccb66a 100%);
+  background: linear-gradient(180deg, #eff6ff 0%, #bfdbfe 100%);
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.65),
     0 6px 14px rgba(15, 23, 42, 0.16);
@@ -397,10 +446,10 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 0;
   padding: 10px 0;
-  border: none;
-  border-radius: 4px;
-  background: #ffffff;
-  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.2);
+  border: 1px solid rgba(18, 19, 26, 0.08);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 22px 46px rgba(18, 19, 26, 0.16);
 }
 
 .user-menu__dropdown::before {
@@ -449,9 +498,11 @@ onBeforeUnmount(() => {
 }
 
 .site-footer {
-  margin-top: 32px;
-  border-top: 1px solid #f3f4f6;
-  padding: 24px 0;
+  margin-top: 40px;
+  border-top: 1px solid rgba(18, 19, 26, 0.08);
+  padding: 28px 0;
+  background: rgba(255, 255, 255, 0.58);
+  backdrop-filter: blur(18px);
 }
 
 .site-footer__inner {
@@ -465,7 +516,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 16px;
-  color: #9ca3af;
+  color: var(--text-muted);
   font-size: 14px;
 }
 
@@ -486,7 +537,7 @@ onBeforeUnmount(() => {
 @media (max-width: 768px) {
   .site-header__inner {
     height: auto;
-    min-height: 56px;
+    min-height: 64px;
     padding-top: 10px;
     padding-bottom: 10px;
   }
@@ -509,7 +560,7 @@ onBeforeUnmount(() => {
   }
 
   .write-trigger {
-    min-height: 34px;
+    min-height: 36px;
     padding: 0 12px;
     font-size: 12px;
   }

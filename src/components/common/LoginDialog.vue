@@ -147,8 +147,8 @@ const goTo = (path: string) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.35);
-  backdrop-filter: blur(2px);
+  background: rgba(18, 19, 26, 0.36);
+  backdrop-filter: blur(8px);
 }
 
 .dialog {
@@ -156,8 +156,10 @@ const goTo = (path: string) => {
   width: min(100%, 384px);
   margin: 0 16px;
   padding: 32px 28px 28px;
-  border-radius: 24px;
-  box-shadow: 0 25px 50px rgba(15, 23, 42, 0.2);
+  border-radius: 28px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(241, 247, 255, 0.9));
+  box-shadow: 0 28px 64px rgba(18, 19, 26, 0.22);
 }
 
 .dialog__close {
@@ -184,18 +186,20 @@ const goTo = (path: string) => {
   height: 40px;
   margin-bottom: 12px;
   flex-shrink: 0;
+  border-radius: 14px;
+  box-shadow: 0 12px 24px rgba(37, 99, 235, 0.16);
 }
 
 .dialog__title {
   margin: 0;
-  color: #111827;
+  color: var(--text-primary);
   font-size: 20px;
-  font-weight: 600;
+  font-weight: 800;
 }
 
 .dialog__subtitle {
   margin: 4px 0 0;
-  color: #9ca3af;
+  color: var(--text-muted);
   font-size: 13px;
 }
 
@@ -208,25 +212,27 @@ const goTo = (path: string) => {
 .dialog__label {
   display: block;
   margin-bottom: 6px;
-  color: #374151;
+  color: var(--text-secondary);
   font-size: 13px;
   font-weight: 500;
 }
 
 .dialog__input {
   width: 100%;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  background: #fafafa;
+  border: 1px solid rgba(18, 19, 26, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.76);
   padding: 10px 16px;
-  color: #111827;
+  color: var(--text-primary);
   font-size: 14px;
   outline: none;
-  transition: border-color 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
 }
 
 .dialog__input:focus {
-  border-color: #6c63ff;
+  border-color: rgba(37, 99, 235, 0.42);
+  background: #ffffff;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
 }
 
 .password-wrap {
@@ -259,13 +265,19 @@ const goTo = (path: string) => {
 .dialog__submit {
   width: 100%;
   margin-top: 4px;
-  border-radius: 12px;
+  border-radius: 14px;
   padding: 10px 16px;
   color: #ffffff;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 800;
   cursor: pointer;
-  transition: opacity 0.2s ease;
+  box-shadow: 0 14px 28px rgba(37, 99, 235, 0.2);
+  transition: opacity 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.dialog__submit:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 18px 34px rgba(37, 99, 235, 0.24);
 }
 
 .dialog__submit:disabled {
@@ -285,7 +297,8 @@ const goTo = (path: string) => {
 }
 
 .dialog__link--brand {
-  color: #6c63ff;
+  color: #2563eb;
+  font-weight: 700;
 }
 
 .dialog__link:hover {
